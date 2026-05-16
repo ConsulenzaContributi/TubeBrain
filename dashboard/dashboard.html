@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Codex_Chrome-PlugIn_YouTube-Learn — Dashboard</title>
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-icon">📚</span>
+      <span class="logo-text">Codex_Chrome-PlugIn_YouTube-Learn</span>
+    </div>
+
+    <nav class="nav">
+      <button class="nav-item active" data-tab="feed">
+        <span class="nav-icon">🏠</span> Feed
+        <span id="nav-feed-badge" class="nav-badge hidden">0</span>
+      </button>
+      <button class="nav-item" data-tab="creators">
+        <span class="nav-icon">👥</span> Creator
+        <span id="nav-creators-count" class="nav-count">0</span>
+      </button>
+      <button class="nav-item" data-tab="archive">
+        <span class="nav-icon">📂</span> Archivio
+        <span id="nav-archive-count" class="nav-count">0</span>
+        <span id="nav-pending-count" class="nav-badge hidden">0</span>
+      </button>
+      <button class="nav-item" data-tab="stats">
+        <span class="nav-icon">📊</span> Statistiche
+      </button>
+      <button class="nav-item" data-tab="chat">
+        <span class="nav-icon">💬</span> Chat
+        <span id="nav-chat-count" class="nav-count" title="Note nell'archivio"></span>
+      </button>
+      <button class="nav-item" data-tab="map">
+        <span class="nav-icon">🗺️</span> Mappa
+      </button>
+      <button class="nav-item" data-tab="guide">
+        <span class="nav-icon">📖</span> Guida
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="nav-item" id="btn-settings-sidebar">
+        <span class="nav-icon">⚙️</span> Impostazioni
+      </button>
+    </div>
+  </aside>
+
+  <!-- Barra di progresso globale (fissa in cima al main) -->
+  <div id="global-progress-bar" class="global-progress-bar hidden">
+    <div class="gp-header">
+      <span id="gp-label">⏳ Elaborazione...</span>
+      <span id="gp-counter" class="gp-counter"></span>
+    </div>
+    <div class="gp-track">
+      <div id="gp-fill" class="gp-fill"></div>
+    </div>
+    <span id="gp-detail" class="gp-detail"></span>
+  </div>
+
+  <!-- Main content -->
+  <main class="main">
+
+    <!-- ── TAB: FEED ── -->
+    <section id="tab-feed" class="tab active">
+      <div class="tab-header">
+        <div>
+          <h1 class="tab-title">Feed Learning</h1>
+          <p class="tab-sub">Monitor dei creator che segui e accesso rapido ai video da trasformare in note operative</p>
+        </div>
+        <div class="tab-actions">
+          <button id="btn-refresh-feed" class="btn btn-ghost btn-sm">🔄 Aggiorna</button>
+        </div>
+      </div>
+
+      <div class="hero-strip">
+        <div class="hero-strip-copy">
+          <p class="hero-strip-eyebrow">Watchlist</p>
+          <h2 class="hero-strip-title">Da creator seguiti a learning assets pronti per l'archivio</h2>
+          <p class="hero-strip-sub">Usa il feed per trovare nuovi tutorial, poi portali nel flusso MDX con trascrizione, studio guidato e sintesi.</p>
+        </div>
+        <div class="hero-kpis">
+          <div class="hero-kpi"><span>Creator</span><strong id="feed-kpi-creators">0</strong></div>
+          <div class="hero-kpi"><span>Nuovi video</span><strong id="feed-kpi-new">0</strong></div>
+          <div class="hero-kpi"><span>In coda</span><strong id="feed-kpi-pending">0</strong></div>
+        </div>
+      </div>
+
+      <!-- Filtri feed -->
+      <div class="filters">
+        <input type="search" id="feed-search" class="search-input" placeholder="Cerca nel feed...">
+        <select id="feed-filter-creator" class="select-input">
+          <option value="">Tutti i creator</option>
+        </select>
+      </div>
+
+      <div id="feed-empty" class="empty-state hidden">
+        <div class="empty-icon">📺</div>
+        <p class="empty-title">Nessun creator seguito</p>
+        <p class="empty-sub">Aggiungi creator dalla tab "Creator" per vedere il loro feed qui</p>
+        <button class="btn btn-primary" onclick="switchTab('creators')">Aggiungi Creator →</button>
+      </div>
+
+      <div id="feed-loading" class="loading-state hidden">
+        <div class="spinner"></div>
+        <p>Caricamento feed...</p>
+      </div>
+
+      <div id="feed-list" class="video-grid"></div>
+    </section>
+
+    <!-- ── TAB: CREATORS ── -->
+    <section id="tab-creators" class="tab hidden">
+      <div class="tab-header">
+        <div>
+          <h1 class="tab-title">Creator Seguiti</h1>
+          <p class="tab-sub">Gestisci il tuo pannello di sorgenti: chi monitorare, cosa filtrare e quanto automatizzare</p>
+        </div>
+      </div>
+
+      <!-- Aggiungi creator -->
+      <div class="add-creator-card">
+        <h3 class="card-title">➕ Aggiungi Creator YouTube</h3>
+        <p class="card-sub">Incolla l'URL del canale YouTube (es: youtube.com/channel/UCxxx o youtube.com/@nome)</p>
+        <div class="add-creator-form">
+          <input type="url" id="creator-url-input" class="text-input" placeholder="https://youtube.com/@creator o /channel/UCxxx...">
+          <button id="btn-add-creator" class="btn btn-primary">Aggiungi</button>
+        </div>
+        <p id="add-creator-feedback" class="feedback-msg hidden"></p>
+      </div>
+
+      <!-- Azioni bulk creator -->
+      <div class="creators-actions-bar">
+        <button id="btn-queue-all-new" class="btn btn-primary btn-sm" title="Accoda tutti i nuovi video da tutti i creator">📥 Accoda nuovi <span id="queue-all-badge" class="queue-all-badge hidden"></span></button>
+        <button id="btn-refresh-all-creators" class="btn btn-ghost btn-sm">🔄 Aggiorna tutti</button>
+        <button id="btn-dedup-creators" class="btn btn-ghost btn-sm">🧹 Rimuovi duplicati</button>
+        <span id="creators-actions-feedback" class="feedback-inline"></span>
+      </div>
+
+      <!-- Modal catch-up (appare dopo aggiunta creator) -->
+      <div id="catchup-modal" class="modal hidden">
+        <div class="modal-backdrop" id="catchup-backdrop"></div>
+        <div class="modal-content modal-sm">
+          <div class="modal-header">
+            <h2 class="modal-title">📼 Catch-up video passati</h2>
+            <button class="btn btn-ghost btn-sm" id="catchup-close">✕</button>
+          </div>
+          <div class="modal-body" style="padding:20px">
+            <p style="font-size:14px;color:var(--text2);margin-bottom:16px">
+              Quanti video recenti di <strong id="catchup-creator-name"></strong> vuoi mettere subito in coda?
+            </p>
+            <div class="catchup-options">
+              <button class="btn btn-ghost catchup-opt" data-count="3">Ultimi 3</button>
+              <button class="btn btn-ghost catchup-opt" data-count="5">Ultimi 5</button>
+              <button class="btn btn-ghost catchup-opt" data-count="10">Ultimi 10</button>
+              <button class="btn btn-ghost catchup-opt" data-count="15">Tutti (15)</button>
+            </div>
+            <p id="catchup-feedback" class="field-hint" style="margin-top:12px"></p>
+          </div>
+          <div class="modal-footer" style="padding:0 20px 20px">
+            <button class="btn btn-ghost btn-sm" id="catchup-skip">Salta — inizia solo dai prossimi video</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="creators-empty" class="empty-state hidden">
+        <div class="empty-icon">👥</div>
+        <p class="empty-title">Nessun creator ancora</p>
+        <p class="empty-sub">Aggiungi il primo creator incollando l'URL del canale qui sopra</p>
+      </div>
+
+      <div id="creators-list" class="creators-grid"></div>
+    </section>
+
+    <!-- ── TAB: ARCHIVIO ── -->
+    <section id="tab-archive" class="tab hidden">
+      <div class="tab-header">
+        <div>
+          <h1 class="tab-title">Archivio Learning MDX</h1>
+          <p class="tab-sub">Tutti i video analizzati, pronti da riaprire, filtrare e riutilizzare come base di studio</p>
+        </div>
+      </div>
+
+      <div class="hero-strip hero-strip-archive">
+        <div class="hero-strip-copy">
+          <p class="hero-strip-eyebrow">Knowledge Base</p>
+          <h2 class="hero-strip-title">Libreria personale di tutorial convertiti in documenti studiabili</h2>
+          <p class="hero-strip-sub">Qui convivono file pronti, video ancora in coda e output multi-livello esportati in MDX.</p>
+        </div>
+        <div class="hero-kpis">
+          <div class="hero-kpi"><span>Totali</span><strong id="archive-kpi-total">0</strong></div>
+          <div class="hero-kpi"><span>Estratti</span><strong id="archive-kpi-extracted">0</strong></div>
+          <div class="hero-kpi"><span>Pending</span><strong id="archive-kpi-pending">0</strong></div>
+        </div>
+      </div>
+
+      <div class="batch-import-card">
+        <div>
+          <h3 class="card-title">📥 Import batch da URL o playlist</h3>
+          <p class="card-sub">Incolla piu URL YouTube o playlist, uno per riga. I video verranno accodati per l'estrazione.</p>
+        </div>
+        <div class="batch-import-form">
+          <textarea id="batch-import-input" class="batch-import-input" placeholder="https://youtube.com/watch?v=...\nhttps://youtube.com/playlist?list=...\nhttps://youtu.be/..."></textarea>
+          <div class="batch-import-actions">
+            <button id="btn-batch-import" class="btn btn-primary">Accoda batch</button>
+            <span id="batch-import-feedback" class="feedback-inline"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="filters">
+        <input type="search" id="archive-search" class="search-input" placeholder="🔍 Cerca per titolo, canale, tag, contenuto MDX...">
+        <button id="btn-semantic-search" class="btn btn-ghost btn-sm" title="Ricerca semantica AI — trova anche senza parole esatte">✨ Semantica</button>
+        <select id="archive-filter-status" class="select-input">
+          <option value="">Tutti</option>
+          <option value="extracted">✅ Estratti</option>
+          <option value="pending">🕐 Da estrarre</option>
+        </select>
+        <select id="archive-filter-channel" class="select-input">
+          <option value="">Tutti i canali</option>
+        </select>
+      </div>
+      <!-- Barra ricerca semantica attiva -->
+      <div id="semantic-active-bar" class="semantic-active-bar hidden">
+        <span id="semantic-active-label">✨ Ricerca semantica: "<span id="semantic-query-text"></span>" — <span id="semantic-result-count">0</span> risultati</span>
+        <button id="btn-semantic-reset" class="btn btn-ghost btn-sm">✕ Annulla</button>
+      </div>
+
+      <div id="archive-empty" class="empty-state hidden">
+        <div class="empty-icon">📄</div>
+        <p class="empty-title">Nessun riepilogo ancora</p>
+        <p class="empty-sub">Apri un video YouTube e usa il popup dell'estensione per generare il primo riepilogo</p>
+      </div>
+
+      <!-- Barra azioni bulk -->
+      <div id="archive-bulk-bar" class="bulk-bar hidden"></div>
+
+      <div id="archive-list" class="archive-grid"></div>
+
+      <!-- Modal anteprima -->
+      <div id="preview-modal" class="modal hidden">
+        <div class="modal-backdrop" id="modal-backdrop"></div>
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 id="modal-title" class="modal-title"></h2>
+            <div class="modal-actions">
+              <button id="modal-download" class="btn btn-ghost btn-sm">⬇️ Scarica MDX</button>
+              <button id="modal-export-json" class="btn btn-ghost btn-sm">{} JSON</button>
+              <button id="modal-export-txt" class="btn btn-ghost btn-sm">TXT</button>
+              <button id="modal-export-agent" class="btn btn-ghost btn-sm">🤖 Antigravity</button>
+              <button id="modal-copy" class="btn btn-ghost btn-sm">📋 Copia MDX</button>
+              <button id="modal-delete" class="btn btn-danger btn-sm">🗑️ Elimina</button>
+              <button id="modal-close" class="btn btn-ghost btn-sm">✕ Chiudi</button>
+            </div>
+          </div>
+          <div id="modal-body" class="modal-body"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── TAB: STATS ── -->
+    <section id="tab-stats" class="tab hidden">
+      <div class="tab-header">
+        <div>
+          <h1 class="tab-title">Statistiche</h1>
+          <p class="tab-sub">Il tuo percorso di apprendimento</p>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-number" id="stat-total">0</div>
+          <div class="stat-label">Video Analizzati</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="stat-creators-n">0</div>
+          <div class="stat-label">Creator Seguiti</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="stat-this-month">0</div>
+          <div class="stat-label">Questo Mese</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="stat-tags">0</div>
+          <div class="stat-label">Topic Unici</div>
+        </div>
+      </div>
+
+      <div class="section-title">Attività Mensile</div>
+      <div id="activity-chart" class="activity-chart"></div>
+
+      <div class="section-title">Topic più Studiati</div>
+      <div id="top-tags" class="tags-cloud"></div>
+    </section>
+
+    <!-- ── TAB: CHAT ── -->
+    <section id="tab-chat" class="tab hidden">
+      <div class="tab-header">
+        <div>
+          <h1 class="tab-title">💬 Chat con l'Archivio</h1>
+          <p class="tab-sub">Fai domande in linguaggio naturale sui tuoi riepiloghi salvati</p>
+        </div>
+        <div class="tab-actions">
+          <button id="btn-chat-clear" class="btn btn-ghost btn-sm" title="Cancella cronologia">🗑️ Nuova Chat</button>
+        </div>
+      </div>
+
+      <div class="chat-layout">
+        <!-- Pannello messaggi -->
+        <div class="chat-messages" id="chat-messages">
+
+          <!-- Schermata benvenuto (visibile se cronologia vuota) -->
+          <div id="chat-welcome" class="chat-welcome">
+            <div class="chat-welcome-icon">💬</div>
+            <h2 class="chat-welcome-title">Chiedimi qualcosa sul tuo archivio</h2>
+            <p class="chat-welcome-sub" id="chat-note-count-label">Caricamento archivio...</p>
+
+            <div class="chat-suggestions" id="chat-suggestions">
+              <button class="chat-suggestion" data-action="chat-suggestion" data-query="Cosa ho imparato di più recente?">
+                📖 Cosa ho imparato di più recente?
+              </button>
+              <button class="chat-suggestion" data-action="chat-suggestion" data-query="Quali video trattano di automazione o workflow?">
+                🤖 Quali video trattano di automazione?
+              </button>
+              <button class="chat-suggestion" data-action="chat-suggestion" data-query="Riassumi i concetti principali su Python che ho studiato">
+                🐍 Riassumi i concetti su Python
+              </button>
+              <button class="chat-suggestion" data-action="chat-suggestion" data-query="Quali tool e software vengono raccomandati nei miei riepiloghi?">
+                🛠️ Quali tool sono consigliati?
+              </button>
+              <button class="chat-suggestion" data-action="chat-suggestion" data-query="Quali sono i punti chiave più importanti che ho raccolto?">
+                🔑 Punti chiave più importanti
+              </button>
+              <button class="chat-suggestion" data-action="chat-suggestion" data-query="Da quali creator ho imparato di più? Su che argomenti?">
+                👥 Da chi ho imparato di più?
+              </button>
+            </div>
+
+            <div id="chat-empty-warn" class="chat-empty-warn hidden">
+              <p>⚠️ Non hai ancora note nell'archivio. Estrai almeno un riepilogo per usare la chat.</p>
+              <button class="btn btn-primary btn-sm" onclick="switchTab('archive')">Vai all'Archivio →</button>
+            </div>
+          </div>
+
+          <!-- I messaggi vengono iniettati qui da JS -->
+        </div>
+
+        <!-- Input area -->
+        <div class="chat-input-area">
+          <div class="chat-input-row">
+            <textarea
+              id="chat-input"
+              class="chat-textarea"
+              placeholder="Es: cosa ho imparato su Python? Quali video trattano di SEO?"
+              rows="2"
+              maxlength="2000"
+            ></textarea>
+            <button id="btn-chat-send" class="btn btn-primary chat-send-btn" title="Invia (Invio)">
+              <span id="chat-send-icon">▶</span>
+            </button>
+          </div>
+          <div class="chat-input-meta">
+            <span id="chat-context-label" class="chat-context-label"></span>
+            <span id="chat-char-count" class="chat-char-count">0 / 2000</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── TAB: MAPPA ── -->
+    <section id="tab-map" class="tab hidden">
+      <div class="tab-header">
+        <div>
+          <h1 class="tab-title">🗺️ Mappa Connessioni</h1>
+          <p class="tab-sub">Cluster tematici dell'archivio — nodi tag e creator, linee = correlazioni</p>
+        </div>
+        <div class="tab-actions">
+          <button id="btn-map-refresh" class="btn btn-ghost btn-sm">🔄 Rigenera</button>
+        </div>
+      </div>
+
+      <div class="map-legend-bar">
+        <span class="legend-item"><span class="legend-dot" style="background:#dbeafe;border:2px solid #1a73e8"></span> Tag tematico</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#d1fae5;border:2px solid #0f9d58"></span> Creator</span>
+        <span class="legend-hint">💡 Clicca un nodo per dettagli · dimensione = frequenza nei riepiloghi</span>
+      </div>
+
+      <div class="map-wrapper">
+        <!-- Grafo SVG -->
+        <div class="map-canvas-area" id="map-canvas-area">
+          <div id="map-empty" class="empty-state hidden">
+            <div class="empty-icon">🗺️</div>
+            <p class="empty-title">Nessun dato per la mappa</p>
+            <p class="empty-sub">Estrai almeno 3 video con tag per visualizzare i cluster tematici</p>
+            <button class="btn btn-primary" onclick="switchTab('archive')">Vai all'Archivio →</button>
+          </div>
+          <svg id="map-svg" class="map-svg"></svg>
+        </div>
+
+        <!-- Pannello dettaglio nodo (appare al click) -->
+        <div id="map-node-detail" class="map-node-detail hidden">
+          <div class="map-detail-header">
+            <p id="map-detail-title" class="map-detail-title"></p>
+            <button class="btn btn-ghost btn-sm" id="btn-map-detail-close">✕</button>
+          </div>
+          <div id="map-detail-body" class="map-detail-body"></div>
+          <div class="map-detail-actions">
+            <button class="btn btn-primary btn-sm" id="btn-map-filter">📂 Filtra nell'Archivio</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── TAB: GUIDA ── -->
+    <section id="tab-guide" class="tab hidden">
+      <div class="tab-header">
+        <div>
+          <h1 class="tab-title">📖 Guida al Plugin</h1>
+          <p class="tab-sub">Codex_Chrome-PlugIn_YouTube-Learn v2.0 RC1 — Tutto quello che devi sapere</p>
+        </div>
+      </div>
+
+      <!-- Navigazione interna guida -->
+      <div class="guide-nav">
+        <a href="#guide-start"    class="guide-nav-item">🚀 Inizio rapido</a>
+        <a href="#guide-api-keys" class="guide-nav-item">🔑 Ottenere le API</a>
+        <a href="#guide-popup"    class="guide-nav-item">📌 Popup</a>
+        <a href="#guide-queue"    class="guide-nav-item">🕐 Coda</a>
+        <a href="#guide-archive"  class="guide-nav-item">📂 Archivio</a>
+        <a href="#guide-chat"     class="guide-nav-item">💬 Chat Archivio</a>
+        <a href="#guide-feed"     class="guide-nav-item">🏠 Feed</a>
+        <a href="#guide-md"       class="guide-nav-item">📄 File MD</a>
+        <a href="#guide-antigrav" class="guide-nav-item">🤖 Antigravity</a>
+        <a href="#guide-settings" class="guide-nav-item">⚙️ Impostazioni</a>
+        <a href="#guide-tips"     class="guide-nav-item">💡 Tips</a>
+      </div>
+
+      <div class="guide-content">
+
+        <!-- ── INIZIO RAPIDO ── -->
+        <div class="guide-section" id="guide-start">
+          <h2 class="guide-h2">🚀 Inizio Rapido</h2>
+          <p class="guide-p">Codex_Chrome-PlugIn_YouTube-Learn trasforma qualsiasi video YouTube in un documento Markdown strutturato, pronto per Obsidian o qualsiasi editor di note. Ecco come iniziare in 3 minuti.</p>
+
+          <div class="guide-steps">
+            <div class="guide-step">
+              <div class="guide-step-num">1</div>
+              <div class="guide-step-body">
+                <strong>Ottieni una API key Gemini</strong>
+                <p>Vai su <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a> e crea una chiave API gratuita. Gemini 2.5 Flash è gratuito fino a 250 richieste/giorno — più che sufficiente per uso personale.</p>
+              </div>
+            </div>
+            <div class="guide-step">
+              <div class="guide-step-num">2</div>
+              <div class="guide-step-body">
+                <strong>Inserisci la chiave nelle Impostazioni</strong>
+                <p>Clicca <strong>⚙️ Impostazioni</strong> in sidebar → incolla la chiave nel campo <em>Gemini API Key</em> → premi <em>Test</em> per verificarla → <em>Salva</em>.</p>
+              </div>
+            </div>
+            <div class="guide-step">
+              <div class="guide-step-num">3</div>
+              <div class="guide-step-body">
+                <strong>Apri un video YouTube e clicca l'icona 📚</strong>
+                <p>Naviga su un video YouTube → clicca l'icona Codex_Chrome-PlugIn_YouTube-Learn nella barra del browser → premi <strong>✨ Genera Learning MDX</strong>. Il file viene salvato automaticamente in <code>LearningHub/</code>.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="guide-callout guide-callout-success">
+            ✅ <strong>Fatto!</strong> Il tuo primo file Markdown è nella cartella Download, dentro <code>LearningHub/{NomeCreator}/{Anno}/</code>
+          </div>
+        </div>
+
+        <!-- ── OTTENERE LE API ── -->
+        <div class="guide-section" id="guide-api-keys">
+          <h2 class="guide-h2">🔑 Come Ottenere le API Gratuite</h2>
+          <p class="guide-p">Codex_Chrome-PlugIn_YouTube-Learn usa due API di Google, entrambe gratuite per uso personale. Ecco come ottenerle passo per passo.</p>
+
+          <!-- GEMINI API -->
+          <div class="guide-api-block">
+            <div class="guide-api-header">
+              <span class="guide-api-badge">Obbligatoria</span>
+              <h3 class="guide-h3" style="margin:0">🤖 Gemini API Key — Google AI Studio</h3>
+            </div>
+            <p class="guide-p">Usata per: generare riepiloghi MD, chat con l'archivio, ricerca semantica, analisi articoli web, alert topic, estrazione tag.</p>
+            <p class="guide-p"><strong>Limite gratuito:</strong> 250 richieste/giorno con Gemini 2.5 Flash (più che sufficiente per uso personale).</p>
+
+            <div class="guide-steps">
+              <div class="guide-step">
+                <div class="guide-step-num">1</div>
+                <div class="guide-step-body">
+                  <strong>Vai su Google AI Studio</strong>
+                  <p>Apri <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a> — accedi con il tuo account Google (lo stesso di Gmail va bene).</p>
+                </div>
+              </div>
+              <div class="guide-step">
+                <div class="guide-step-num">2</div>
+                <div class="guide-step-body">
+                  <strong>Crea un nuovo progetto (se richiesto)</strong>
+                  <p>Se è la prima volta, Google ti chiede di creare un progetto. Dai un nome a piacere (es. "Codex_Chrome-PlugIn_YouTube-Learn") e conferma.</p>
+                </div>
+              </div>
+              <div class="guide-step">
+                <div class="guide-step-num">3</div>
+                <div class="guide-step-body">
+                  <strong>Clicca "Create API key"</strong>
+                  <p>Nella pagina API Keys, clicca il pulsante blu <strong>"Create API key"</strong>. Scegli il progetto appena creato (o quello esistente) → <strong>"Create API key in existing project"</strong>.</p>
+                </div>
+              </div>
+              <div class="guide-step">
+                <div class="guide-step-num">4</div>
+                <div class="guide-step-body">
+                  <strong>Copia la chiave</strong>
+                  <p>La chiave inizia con <code>AIza...</code>. Clicca l'icona 📋 per copiarla. <strong>Non condividerla mai</strong> pubblicamente.</p>
+                </div>
+              </div>
+              <div class="guide-step">
+                <div class="guide-step-num">5</div>
+                <div class="guide-step-body">
+                  <strong>Incollala nelle Impostazioni di Codex_Chrome-PlugIn_YouTube-Learn</strong>
+                  <p>Sidebar → ⚙️ Impostazioni → campo <em>"Gemini API Key"</em> → incolla → clicca <strong>Test</strong> per verificare → <strong>Salva Impostazioni</strong>.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="guide-callout guide-callout-success">
+              ✅ <strong>Fatto!</strong> Con questa sola chiave puoi già usare tutte le funzioni principali di Codex_Chrome-PlugIn_YouTube-Learn: riepiloghi, chat, ricerca semantica.
+            </div>
+          </div>
+
+          <!-- YOUTUBE API -->
+          <div class="guide-api-block" style="margin-top:28px">
+            <div class="guide-api-header">
+              <span class="guide-api-badge guide-api-badge-opt">Opzionale</span>
+              <h3 class="guide-h3" style="margin:0">📺 YouTube Data API v3 — Google Cloud Console</h3>
+            </div>
+            <p class="guide-p">Usata per: avatar del canale, numero iscritti, numero video pubblicati, paese del creator. Senza questa chiave, le card creator mostrano solo l'iniziale del nome.</p>
+            <p class="guide-p"><strong>Limite gratuito:</strong> 10.000 unità/giorno (ogni richiesta dati creator = ~1-5 unità). Praticamente illimitato per uso personale.</p>
+
+            <div class="guide-steps">
+              <div class="guide-step">
+                <div class="guide-step-num">1</div>
+                <div class="guide-step-body">
+                  <strong>Apri Google Cloud Console</strong>
+                  <p>Vai su <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a> → accedi con lo stesso account Google usato per AI Studio.</p>
+                </div>
+              </div>
+              <div class="guide-step">
+                <div class="guide-step-num">2</div>
+                <div class="guide-step-body">
+                  <strong>Seleziona (o crea) lo stesso progetto</strong>
+                  <p>In alto a sinistra, clicca sul selettore progetto → seleziona il progetto che hai creato in AI Studio (es. "Codex_Chrome-PlugIn_YouTube-Learn"). Se non lo vedi, cerca per nome.</p>
+                </div>
+              </div>
+              <div class="guide-step">
+                <div class="guide-step-num">3</div>
+                <div class="guide-step-body">
+                  <strong>Abilita YouTube Data API v3</strong>
+                  <p>Vai su <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank">APIs &amp; Services → Library</a> → cerca "YouTube Data API v3" → clicca sul risultato → clicca <strong>"Enable"</strong> (o "Abilita").</p>
+                </div>
+              </div>
+              <div class="guide-step">
+                <div class="guide-step-num">4</div>
+                <div class="guide-step-body">
+                  <strong>Crea o riutilizza una API Key</strong>
+                  <p>Vai su <a href="https://console.cloud.google.com/apis/credentials" target="_blank">APIs &amp; Services → Credentials</a>. Se hai già creato una chiave API per questo progetto (es. la stessa usata per Gemini), <strong>puoi usare la stessa chiave</strong> — funzionerà per entrambe le API. Altrimenti clicca <strong>"Create Credentials" → "API key"</strong>.</p>
+                </div>
+              </div>
+              <div class="guide-step">
+                <div class="guide-step-num">5</div>
+                <div class="guide-step-body">
+                  <strong>Incollala nelle Impostazioni</strong>
+                  <p>Sidebar → ⚙️ Impostazioni → campo <em>"YouTube Data API v3 Key"</em> → incolla → clicca <strong>Test</strong> → <strong>Salva</strong>. Puoi incollare la stessa chiave Gemini se il progetto ha entrambe le API attive.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="guide-callout">
+              💡 <strong>Suggerimento:</strong> Usa la stessa API key per entrambi i campi — è il metodo più semplice. Assicurati solo che il progetto Google Cloud abbia sia "Generative Language API" (Gemini) che "YouTube Data API v3" abilitate.
+            </div>
+
+            <div class="guide-callout guide-callout-warn" style="margin-top:12px">
+              ⚠️ <strong>Mai condividere le API key.</strong> Non incollarle in chat, non pubblicarle su GitHub, non inviarle in email. Se per errore le esponi pubblicamente, revocale subito dalla console Google e creane di nuove.
+            </div>
+          </div>
+
+          <!-- INSTAGRAM: NESSUNA API RICHIESTA -->
+          <div class="guide-api-block" style="margin-top:28px">
+            <div class="guide-api-header">
+              <span class="guide-api-badge guide-api-badge-opt">Nessuna chiave</span>
+              <h3 class="guide-h3" style="margin:0">📸 Instagram — Analisi senza API aggiuntive</h3>
+            </div>
+            <p class="guide-p">Per analizzare post, reel e profili Instagram <strong>non serve nessuna API aggiuntiva</strong>. Codex_Chrome-PlugIn_YouTube-Learn usa la Gemini API Key già configurata per analizzare il testo visibile nella pagina.</p>
+            <p class="guide-p"><strong>Come funziona:</strong> apri la pagina Instagram nel browser (post, reel o profilo) → clicca l'icona 📚 Codex_Chrome-PlugIn_YouTube-Learn → clicca <strong>📸 Analizza</strong>. L'estensione legge la caption, gli hashtag e il testo visibile nella pagina, poi Gemini genera il riepilogo.</p>
+            <div class="guide-callout guide-callout-warn">
+              ⚠️ <strong>Limitazioni Instagram:</strong> i Reel e i video non hanno trascrizione audio (a differenza di YouTube). L'analisi si basa solo sul testo scritto (caption, hashtag, bio). Per risultati migliori, assicurati di essere loggato su Instagram prima di analizzare.
+            </div>
+          </div>
+        </div>
+
+        <!-- ── POPUP ── -->
+        <div class="guide-section" id="guide-popup">
+          <h2 class="guide-h2">📌 Il Popup — Pannello Principale</h2>
+          <p class="guide-p">Il popup si apre cliccando l'icona 📚 nella barra di Chrome. Funziona <strong>solo su pagine video YouTube</strong> (<code>youtube.com/watch?v=…</code>).</p>
+
+          <div class="guide-table-wrap">
+            <table class="guide-table">
+              <thead><tr><th>Elemento</th><th>Cosa fa</th></tr></thead>
+              <tbody>
+                <tr><td>🖼️ Anteprima video</td><td>Mostra titolo, canale, lingue sottotitoli disponibili, visualizzazioni e data pubblicazione</td></tr>
+                <tr><td>🔄 Pulsante refresh</td><td>Aggiorna le statistiche del video (visualizzazioni) in tempo reale rileggendo la pagina</td></tr>
+                <tr><td><strong>✨ Genera Learning MDX</strong></td><td>Avvia estrazione trascrizione + pipeline learning Gemini. Il file viene <strong>salvato automaticamente</strong> al termine senza ulteriori clic</td></tr>
+                <tr><td>🕐 Coda</td><td>Aggiunge il video alla lista "Da estrarre" nell'archivio, senza avviare l'analisi AI subito</td></tr>
+                <tr><td>➕ Segui Creator</td><td>Aggiunge il canale del video alla lista creator monitorati (tab Feed)</td></tr>
+                <tr><td>📋 Copia Markdown</td><td>Copia il testo MD generato negli appunti</td></tr>
+                <tr><td>📂 Scarica copia MD</td><td>Scarica una copia aggiuntiva del file (il file originale è già stato salvato in automatico)</td></tr>
+                <tr><td>⊞ Dashboard</td><td>Apre la dashboard completa in una nuova tab</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="guide-callout">
+            💡 Se vedi l'errore <em>"Nessun video rilevato"</em>, ricarica la pagina YouTube con <strong>F5</strong> e riprova.
+          </div>
+        </div>
+
+        <!-- ── CODA ── -->
+        <div class="guide-section" id="guide-queue">
+          <h2 class="guide-h2">🕐 La Coda — Salva Ora, Estrai Dopo</h2>
+          <p class="guide-p">Stai guardando un video interessante ma non hai tempo per aspettare l'analisi AI? Aggiungilo alla coda: viene salvato nell'archivio come "Da estrarre" e puoi elaborarlo quando vuoi.</p>
+
+          <h3 class="guide-h3">Come aggiungere alla coda</h3>
+          <div class="guide-methods">
+            <div class="guide-method">
+              <div class="guide-method-icon">⌨️</div>
+              <div>
+                <strong>Scorciatoia tastiera</strong>
+                <p><kbd>⌘ Cmd</kbd> + <kbd>⇧ Shift</kbd> + <kbd>P</kbd> su Mac<br><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd> su Windows/Linux</p>
+                <p>Funziona <strong>senza aprire il popup</strong> — puoi farlo mentre guardi il video!</p>
+              </div>
+            </div>
+            <div class="guide-method">
+              <div class="guide-method-icon">📌</div>
+              <div>
+                <strong>Pulsante nel popup</strong>
+                <p>Apri il popup → clicca <em>🕐 Coda</em>. Stesso risultato della scorciatoia.</p>
+              </div>
+            </div>
+          </div>
+
+          <h3 class="guide-h3">Come estrarre i video in coda</h3>
+          <p class="guide-p">Vai nella tab <strong>Archivio</strong> → usa il filtro <em>"🕐 Da estrarre"</em> → clicca <strong>✨ Estrai</strong> sulla card del video.</p>
+          <p class="guide-p">L'estrazione avviene <strong>completamente in background</strong>: Codex_Chrome-PlugIn_YouTube-Learn apre la pagina YouTube in una tab nascosta, legge la trascrizione, chiama Gemini, salva il file e chiude la tab. Riceverai una <strong>notifica Chrome</strong> al termine.</p>
+
+          <div class="guide-callout guide-callout-warn">
+            ⚠️ L'estrazione in background richiede che Chrome rimanga aperto. Non chiudere il browser durante l'elaborazione.
+          </div>
+
+          <h3 class="guide-h3">Personalizzare la scorciatoia</h3>
+          <p class="guide-p">Vai su <strong>chrome://extensions/shortcuts</strong> → trova "Codex_Chrome-PlugIn_YouTube-Learn" → clicca la matita accanto a "Aggiungi video alla coda" → inserisci la combinazione preferita.</p>
+        </div>
+
+        <!-- ── ARCHIVIO ── -->
+        <div class="guide-section" id="guide-archive">
+          <h2 class="guide-h2">📂 L'Archivio — Il tuo Knowledge Base</h2>
+          <p class="guide-p">L'archivio contiene tutti i video salvati, sia estratti che in coda. I file MD sono organizzati nel tuo sistema di file con questa struttura:</p>
+
+          <div class="guide-code">LearningHub/<br>
+&nbsp;&nbsp;└── NomeCreator/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── 2026/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── 2026-05-10_Titolo_Video.mdx<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── 2025/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── 2025-12-01_Altro_Video.mdx<br>
+&nbsp;&nbsp;└── AltroCreator/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── ...</div>
+
+          <h3 class="guide-h3">Ricerca full-text</h3>
+          <p class="guide-p">La barra di ricerca cerca in: titolo, canale, tag, e nel <strong>testo completo del Markdown generato</strong>. I risultati mostrano uno snippet contestuale con la parola cercata evidenziata in giallo.</p>
+
+          <h3 class="guide-h3">I pulsanti della card</h3>
+          <div class="guide-table-wrap">
+            <table class="guide-table">
+              <thead><tr><th>Pulsante</th><th>Quando appare</th><th>Cosa fa</th></tr></thead>
+              <tbody>
+                <tr><td>▶</td><td>Sempre</td><td>Apre il video su YouTube</td></tr>
+                <tr><td>✨ Estrai</td><td>Video in coda (non ancora estratto)</td><td>Avvia estrazione MD in background</td></tr>
+                <tr><td>📂 MD</td><td>Video già estratto</td><td>Riscarica il file MD nella cartella Download</td></tr>
+                <tr><td>🗑️</td><td>Sempre</td><td>Elimina dall'archivio (non cancella il file dal disco)</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ── CHAT ARCHIVIO ── -->
+        <div class="guide-section" id="guide-chat">
+          <h2 class="guide-h2">💬 Chat con l'Archivio</h2>
+          <p class="guide-p">La chat ti permette di fare domande in linguaggio naturale su tutti i tuoi riepiloghi salvati. Gemini analizza i documenti più rilevanti e risponde citando le fonti.</p>
+
+          <div class="guide-callout guide-callout-info">
+            🔑 <strong>Richiede:</strong> Gemini API Key configurata nelle Impostazioni. Non richiede API Key YouTube.
+          </div>
+
+          <h3 class="guide-h3">Come funziona (RAG)</h3>
+          <p class="guide-p">Quando invii una domanda, Codex_Chrome-PlugIn_YouTube-Learn usa un approccio <strong>RAG (Retrieval Augmented Generation)</strong>:</p>
+          <div class="guide-steps">
+            <div class="guide-step">
+              <div class="guide-step-num">1</div>
+              <div class="guide-step-body">
+                <strong>Pre-filtraggio keyword</strong>
+                <p>La domanda viene analizzata per trovare le parole chiave e selezionare i riepiloghi più rilevanti dal tuo archivio (fino a 25).</p>
+              </div>
+            </div>
+            <div class="guide-step">
+              <div class="guide-step-num">2</div>
+              <div class="guide-step-body">
+                <strong>Costruzione del contesto</strong>
+                <p>I riepiloghi selezionati vengono inclusi nel prompt (fino a ~380.000 caratteri di testo). Gemini non "conosce" i tuoi documenti — li legge ogni volta in tempo reale.</p>
+              </div>
+            </div>
+            <div class="guide-step">
+              <div class="guide-step-num">3</div>
+              <div class="guide-step-body">
+                <strong>Risposta con citazioni</strong>
+                <p>Gemini risponde basandosi <strong>esclusivamente</strong> sui tuoi documenti, citando le fonti con [Titolo]. Le fonti usate appaiono come chip cliccabili sotto la risposta.</p>
+              </div>
+            </div>
+          </div>
+
+          <h3 class="guide-h3">Esempi di domande utili</h3>
+          <div class="guide-table-wrap">
+            <table class="guide-table">
+              <thead><tr><th>Tipo di domanda</th><th>Esempi</th></tr></thead>
+              <tbody>
+                <tr><td>Riepilogo tematico</td><td>"Cosa ho imparato su Python?" · "Riassumi tutto quello che so di SEO"</td></tr>
+                <tr><td>Ricerca concetti</td><td>"Come funziona il sistema di autenticazione OAuth?" · "Cosa dice il mio archivio sui database vettoriali?"</td></tr>
+                <tr><td>Confronto</td><td>"Quali sono le differenze tra i tool di automazione citati nei miei video?"</td></tr>
+                <tr><td>Discovery</td><td>"Quali argomenti ho studiato di più?" · "Da quali creator ho imparato di più?"</td></tr>
+                <tr><td>Azione</td><td>"Dammi un piano di studio basato sui contenuti che ho salvato"</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="guide-callout guide-callout-warn">
+            ⚠️ La chat risponde <strong>solo in base ai tuoi riepiloghi</strong>. Se un argomento non è presente nell'archivio, Gemini lo dirà esplicitamente anziché inventare. Per risultati migliori, estrai più riepiloghi.
+          </div>
+        </div>
+
+        <!-- ── FEED ── -->
+        <div class="guide-section" id="guide-feed">
+          <h2 class="guide-h2">🏠 Il Feed — Tieni Traccia dei Creator</h2>
+          <p class="guide-p">Il feed aggrega i video più recenti di tutti i creator che segui, come un RSS reader personalizzato. I dati vengono recuperati dal feed XML pubblico di YouTube — <strong>senza chiavi API aggiuntive</strong>.</p>
+
+          <h3 class="guide-h3">Aggiungere un creator</h3>
+          <p class="guide-p">Vai in <strong>Creator</strong> → incolla l'URL del canale YouTube in uno di questi formati:</p>
+          <div class="guide-code">https://youtube.com/@nomecreator<br>https://youtube.com/channel/UCxxxxxxx<br>https://youtube.com/c/nomecreator</div>
+
+          <h3 class="guide-h3">Statistiche canale (opzionale)</h3>
+          <p class="guide-p">Se inserisci una <strong>YouTube Data API v3 Key</strong> nelle impostazioni, ogni card creator mostrerà: avatar reale, numero iscritti, numero video, paese. Senza chiave, viene usato il fallback (iniziale del nome).</p>
+          <p class="guide-p">Per ottenere la chiave: <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank">Google Cloud Console</a> → abilita YouTube Data API v3 → crea credenziale API Key. Puoi usare la stessa chiave Gemini se il progetto ha entrambe le API attive.</p>
+
+          <h3 class="guide-h3">Aggiornamento automatico</h3>
+          <p class="guide-p">Il feed si aggiorna automaticamente ogni <strong>30 minuti</strong>. Clicca 🔄 per forzare un aggiornamento immediato. I video già riassunti mostrano il badge ✅.</p>
+        </div>
+
+        <!-- ── FILE MD ── -->
+        <div class="guide-section" id="guide-md">
+          <h2 class="guide-h2">📄 Il File Markdown Generato</h2>
+          <p class="guide-p">Ogni output principale è un file <code>.mdx</code> compatibile con workflow Markdown avanzati e archivio locale. Include frontmatter YAML e sezioni a 3 livelli per studio, ripasso e replicazione.</p>
+
+          <h3 class="guide-h3">Struttura del documento</h3>
+          <div class="guide-table-wrap">
+            <table class="guide-table">
+              <thead><tr><th>Sezione</th><th>Contenuto</th></tr></thead>
+              <tbody>
+                <tr><td>📋 Riepilogo Generale</td><td>3-4 paragrafi: di cosa tratta, cosa si impara, a chi è rivolto, risultato finale</td></tr>
+                <tr><td>🎯 Prerequisiti</td><td>Conoscenze, software e configurazioni necessarie prima di seguire il tutorial</td></tr>
+                <tr><td>🛠️ Tool e Software</td><td>Tabella di tutti gli strumenti, librerie e servizi menzionati nel video</td></tr>
+                <tr><td>📚 Capitoli Dettagliati</td><td>Ogni sezione del video con: riepilogo, passaggi eseguiti, codice mostrato</td></tr>
+                <tr><td>💻 Raccolta Codice</td><td>Tutto il codice e i comandi del video raccolti in un unico blocco</td></tr>
+                <tr><td>🔑 Punti Chiave</td><td>7-10 takeaway specifici e actionable</td></tr>
+                <tr><td>🔄 Blueprint</td><td>Struttura narrativa del video replicabile per creare contenuti simili</td></tr>
+                <tr><td>📎 Risorse e Link</td><td>Tutti i link, canali, libri e strumenti citati</td></tr>
+                <tr><td>🤖 Workflow Antigravity</td><td>Istruzioni operative per replicare il workflow in Google Antigravity</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 class="guide-h3">Frontmatter YAML (compatibile Obsidian)</h3>
+          <div class="guide-code">---<br>title: "Titolo del video"<br>channel: "Nome Creator"<br>date: 2026-05-10<br>tags: [python, tutorial, automazione]<br>source: "https://youtube.com/watch?v=..."<br>platform: youtube<br>---</div>
+
+          <h3 class="guide-h3">Lingua del documento</h3>
+          <p class="guide-p">Nelle Impostazioni puoi scegliere: <strong>Italiano</strong> (sempre), <strong>English</strong> (sempre), o <strong>Automatico</strong> (segue la lingua del sistema operativo). La lingua del video non influisce — Gemini traduce automaticamente.</p>
+        </div>
+
+        <!-- ── ANTIGRAVITY ── -->
+        <div class="guide-section" id="guide-antigrav">
+          <h2 class="guide-h2">🤖 Workflow Antigravity</h2>
+          <p class="guide-p">La sezione finale di ogni file MD contiene istruzioni operative pronte per <a href="https://antigravity.google" target="_blank">Google Antigravity</a>, la piattaforma di Google per agenti AI automatici.</p>
+
+          <h3 class="guide-h3">Come usare le istruzioni</h3>
+          <div class="guide-steps">
+            <div class="guide-step">
+              <div class="guide-step-num">1</div>
+              <div class="guide-step-body">
+                <strong>Apri il file MD generato</strong>
+                <p>Vai alla sezione <code>## 🤖 Workflow Antigravity</code> in fondo al documento.</p>
+              </div>
+            </div>
+            <div class="guide-step">
+              <div class="guide-step-num">2</div>
+              <div class="guide-step-body">
+                <strong>Copia il "Prompt di Esecuzione Rapida"</strong>
+                <p>Trovi un blocco di testo pronto all'uso, con la descrizione completa del workflow in linguaggio naturale.</p>
+              </div>
+            </div>
+            <div class="guide-step">
+              <div class="guide-step-num">3</div>
+              <div class="guide-step-body">
+                <strong>Incolla in Google Antigravity</strong>
+                <p>Apri <a href="https://antigravity.google" target="_blank">antigravity.google</a> → crea un nuovo agente → incolla il prompt → configura i tool indicati nella tabella → avvia.</p>
+              </div>
+            </div>
+          </div>
+
+          <h3 class="guide-h3">Struttura YAML del workflow</h3>
+          <p class="guide-p">Il file include anche una definizione YAML con: nome workflow, input richiesti, steps dettagliati (tool, azione, input, output atteso, gestione errori), e variabili che si passano tra steps (<code>{{step_1.output}}</code>).</p>
+
+          <div class="guide-callout">
+            💡 Le istruzioni Antigravity sono generate automaticamente da Gemini analizzando i passaggi tecnici del video. Più il video è un tutorial pratico con step precisi, più le istruzioni saranno accurate e operative.
+          </div>
+        </div>
+
+        <!-- ── IMPOSTAZIONI ── -->
+        <div class="guide-section" id="guide-settings">
+          <h2 class="guide-h2">⚙️ Impostazioni</h2>
+          <p class="guide-p">Accessibili da: sidebar → Impostazioni, oppure popup → icona ⚙</p>
+
+          <div class="guide-table-wrap">
+            <table class="guide-table">
+              <thead><tr><th>Impostazione</th><th>Descrizione</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Gemini API Key</strong> *</td><td>Obbligatoria. Gratuita su <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>. Usa il pulsante Test per verificarla prima di salvare.</td></tr>
+                <tr><td><strong>YouTube Data API v3 Key</strong></td><td>Opzionale. Abilita avatar, iscritti e statistiche nei creator. Richiede YouTube Data API v3 attiva nel progetto Google Cloud.</td></tr>
+                <tr><td><strong>Modello LLM</strong></td><td>Gemini 2.5 Flash (consigliato, gratuito), Flash-Lite (più veloce), Pro (più preciso ma più lento).</td></tr>
+                <tr><td><strong>Lingua Output</strong></td><td>Italiano, English, o Automatico (segue la lingua del sistema).</td></tr>
+                <tr><td><strong>Cartella Obsidian</strong></td><td>Se selezioni la cartella del tuo vault Obsidian, i file vengono salvati direttamente lì (oltre che in Download).</td></tr>
+                <tr><td><strong>Shortcut tastiera</strong></td><td>Configurabile in <a href="chrome://extensions/shortcuts" target="_blank">chrome://extensions/shortcuts</a>. Default: ⌘⇧P (Mac) / Ctrl+Shift+P (Win).</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ── TIPS ── -->
+        <div class="guide-section" id="guide-tips">
+          <h2 class="guide-h2">💡 Tips &amp; Tricks</h2>
+
+          <div class="guide-tips-grid">
+            <div class="guide-tip">
+              <div class="guide-tip-icon">⚡</div>
+              <div>
+                <strong>Elabora mentre guardi</strong>
+                <p>Mentre guardi un video interessante, premi <kbd>⌘⇧P</kbd> per metterlo in coda. Poi elabora tutti in batch dalla Dashboard quando sei pronto.</p>
+              </div>
+            </div>
+            <div class="guide-tip">
+              <div class="guide-tip-icon">🔍</div>
+              <div>
+                <strong>Cerca nel contenuto</strong>
+                <p>La ricerca in Archivio trova parole dentro il testo dei file MD, non solo nei titoli. Cerca un comando, un tool o un concetto per trovare il video giusto.</p>
+              </div>
+            </div>
+            <div class="guide-tip">
+              <div class="guide-tip-icon">🗂️</div>
+              <div>
+                <strong>Integrazione Obsidian</strong>
+                <p>Seleziona la cartella del vault nelle Impostazioni. I file vengono creati con frontmatter YAML e tag automatici, pronti per il graph view di Obsidian.</p>
+              </div>
+            </div>
+            <div class="guide-tip">
+              <div class="guide-tip-icon">📊</div>
+              <div>
+                <strong>Monitorare l'apprendimento</strong>
+                <p>La tab Statistiche mostra il grafico dell'attività mensile e i topic più studiati. Utile per tracciare il tuo percorso formativo nel tempo.</p>
+              </div>
+            </div>
+            <div class="guide-tip">
+              <div class="guide-tip-icon">🎯</div>
+              <div>
+                <strong>Video senza sottotitoli</strong>
+                <p>Se un video non ha sottotitoli, Gemini analizza comunque il titolo, la descrizione e i metadati. Il riepilogo sarà meno dettagliato ma sempre utile.</p>
+              </div>
+            </div>
+            <div class="guide-tip">
+              <div class="guide-tip-icon">🔄</div>
+              <div>
+                <strong>Modello Pro per video complessi</strong>
+                <p>Per tutorial lunghi e densi di contenuto tecnico, passa a Gemini 2.5 Pro nelle impostazioni per un'analisi più accurata (stesso costo: gratuito).</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="guide-callout guide-callout-info" style="margin-top:24px">
+            🐛 <strong>Problema tecnico?</strong> Nella maggior parte dei casi basta ricaricare la tab YouTube con <strong>F5</strong> e riaprire il popup. Se il problema persiste, vai su <code>chrome://extensions</code> → 🔄 Aggiorna Codex_Chrome-PlugIn_YouTube-Learn → F5 su YouTube.
+          </div>
+        </div>
+
+      </div><!-- /guide-content -->
+    </section>
+
+  </main>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>

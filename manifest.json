@@ -1,0 +1,66 @@
+{
+  "manifest_version": 3,
+  "name": "Codex_Chrome-PlugIn_YouTube-Learn",
+  "version": "2.0.0",
+  "description": "Trasforma video YouTube in Learning MDX a 3 livelli con archivio, automazione e workflow per studio operativo.",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "downloads",
+    "scripting",
+    "tabs",
+    "notifications",
+    "alarms"
+  ],
+  "host_permissions": [
+    "*://*.youtube.com/*",
+    "*://generativelanguage.googleapis.com/*",
+    "*://www.youtube.com/feeds/*",
+    "*://www.googleapis.com/*",
+    "*://*.vimeo.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/watch*"],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Codex_Chrome-PlugIn_YouTube-Learn",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["dashboard/dashboard.html"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "commands": {
+    "add-to-queue": {
+      "suggested_key": {
+        "mac": "Command+Shift+P",
+        "windows": "Ctrl+Shift+P",
+        "linux": "Ctrl+Shift+P"
+      },
+      "description": "Codex_Chrome-PlugIn_YouTube-Learn: Aggiungi video alla coda (senza estrarre)"
+    }
+  }
+}

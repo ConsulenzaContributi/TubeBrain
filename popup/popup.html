@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Codex_Chrome-PlugIn_YouTube-Learn</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="logo">
+      <span class="logo-icon">📚</span>
+      <span class="logo-text">Codex_Chrome-PlugIn_YouTube-Learn</span>
+    </div>
+    <div class="header-actions">
+      <button id="btn-dashboard" class="icon-btn" title="Apri Dashboard">⊞</button>
+      <button id="btn-settings" class="icon-btn" title="Impostazioni">⚙</button>
+    </div>
+  </header>
+
+  <!-- Stato: non su YouTube — offre analisi articolo -->
+  <div id="state-not-youtube" class="state hidden">
+    <div class="state-icon">🎬</div>
+    <p class="state-title">Nessun video YouTube</p>
+    <p class="state-sub">Apri un video YouTube, oppure analizza questa pagina web.</p>
+    <div class="actions">
+      <button id="btn-analyze-page" class="btn btn-primary">
+        <span class="btn-icon">📄</span> Analizza questa pagina
+      </button>
+      <button id="btn-open-yt" class="btn btn-ghost">Apri YouTube</button>
+    </div>
+    <p id="webpage-hint" class="state-sub" style="margin-top:8px;font-size:11px;color:#868e96">Articoli, blog post, documentazione — qualsiasi pagina con testo</p>
+  </div>
+
+  <!-- Stato: estrazione articolo in corso -->
+  <div id="state-analyzing-page" class="state hidden">
+    <div class="progress-wrap">
+      <div class="spinner large"></div>
+      <p class="state-title">Analisi pagina…</p>
+      <div class="progress-bar-wrap">
+        <div id="article-progress-bar" class="progress-bar" style="width:0%"></div>
+      </div>
+      <p id="article-progress-step" class="state-sub">Estrazione contenuto…</p>
+    </div>
+  </div>
+
+  <!-- Stato: caricamento info video -->
+  <div id="state-loading-info" class="state hidden">
+    <div class="spinner"></div>
+    <p class="state-sub">Lettura informazioni video...</p>
+  </div>
+
+  <!-- Stato: video rilevato -->
+  <div id="state-video" class="state hidden">
+
+    <div class="video-card">
+      <img id="video-thumb" src="" alt="" class="video-thumb">
+      <div class="video-info">
+        <p id="video-title" class="video-title"></p>
+        <p id="video-channel" class="video-channel"></p>
+        <div id="video-badges" class="video-badges"></div>
+        <!-- Statistiche video con refresh -->
+        <div class="video-stats-row">
+          <span id="video-views" class="video-stat"></span>
+          <span id="video-pubdate" class="video-stat"></span>
+          <button id="btn-refresh-stats" class="stat-refresh-btn" title="Aggiorna statistiche">🔄</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alert: già riassunto -->
+    <div id="already-summarized" class="alert alert-info hidden">
+      ✅ Hai già un riepilogo per questo video.
+      <a id="link-existing" href="#" class="alert-link">Vedi nell'archivio</a>
+    </div>
+
+    <!-- Alert: nessun sottotitolo -->
+    <div id="no-captions-warn" class="alert alert-warn hidden">
+      ⚠️ Nessun sottotitolo disponibile. Il riepilogo verrà generato dai metadati.
+    </div>
+
+    <div class="workflow-card">
+      <div class="workflow-head">
+        <div>
+          <p class="workflow-eyebrow">Learning Pipeline</p>
+          <h3 class="workflow-title">Dal video a un file MDX studiabile</h3>
+        </div>
+        <div id="transcript-health" class="health-pill">CC in verifica</div>
+      </div>
+      <div class="workflow-metrics">
+        <div class="workflow-metric">
+          <span class="workflow-metric-label">Capitoli</span>
+          <strong id="metric-chapters">0</strong>
+        </div>
+        <div class="workflow-metric">
+          <span class="workflow-metric-label">Lingua</span>
+          <strong id="metric-language">-</strong>
+        </div>
+        <div class="workflow-metric">
+          <span class="workflow-metric-label">Transcript</span>
+          <strong id="metric-transcript">-</strong>
+        </div>
+      </div>
+      <div class="mode-preview-grid">
+        <div class="mode-preview-card" data-mode-card="verbatim">
+          <span class="mode-preview-kicker">1</span>
+          <strong>Integrale</strong>
+          <p>Trascrizione fedele con capitoli e base documentale completa.</p>
+        </div>
+        <div class="mode-preview-card mode-preview-card-active" data-mode-card="study">
+          <span class="mode-preview-kicker">2</span>
+          <strong>Studio</strong>
+          <p>Capitoli operativi, checklist e workflow per Antigravity.</p>
+        </div>
+        <div class="mode-preview-card" data-mode-card="summary">
+          <span class="mode-preview-kicker">3</span>
+          <strong>Sintesi</strong>
+          <p>Ripasso rapido per capitolo, utile prima di rieseguire il tutorial.</p>
+        </div>
+      </div>
+      <p id="mode-description" class="mode-description">
+        Il file aprirà in priorità la modalità Studio guidato, mantenendo comunque tutte le altre sezioni nello stesso MDX.
+      </p>
+    </div>
+
+    <div class="mode-card">
+      <label for="learning-mode" class="mode-label">Modalità iniziale del file MDX</label>
+      <select id="learning-mode" class="mode-select">
+        <option value="verbatim">1. Trascrizione integrale</option>
+        <option value="study" selected>2. Studio guidato</option>
+        <option value="summary">3. Sintesi rapida</option>
+      </select>
+      <p class="mode-hint">Il file conterrà sempre tutti e 3 i livelli. Questa scelta decide quale modalità evidenziare all'apertura.</p>
+    </div>
+
+    <div class="actions">
+      <button id="btn-generate" class="btn btn-primary">
+        <span class="btn-icon">✨</span>
+        Genera Learning MDX
+      </button>
+      <div class="actions-row">
+        <button id="btn-add-queue" class="btn btn-ghost btn-half" title="Aggiungi alla coda senza estrarre (⌘⇧P)">
+          <span class="btn-icon">🕐</span> Coda
+        </button>
+        <button id="btn-add-creator" class="btn btn-ghost btn-half">
+          <span class="btn-icon">➕</span> Segui Creator
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stato: generazione in corso -->
+  <div id="state-generating" class="state hidden">
+    <div class="progress-wrap">
+      <div class="spinner large"></div>
+      <p id="progress-label" class="state-title">Analisi trascrizione...</p>
+      <div class="progress-bar-wrap">
+        <div id="progress-bar" class="progress-bar" style="width:0%"></div>
+      </div>
+      <p id="progress-step" class="state-sub">Estrazione contenuto in corso</p>
+    </div>
+  </div>
+
+  <!-- Stato: riepilogo completato -->
+  <div id="state-done" class="state hidden">
+
+    <div class="done-header">
+      <span class="done-icon">🎉</span>
+      <div>
+        <p class="state-title">Riepilogo generato!</p>
+        <p id="done-filename" class="state-sub"></p>
+      </div>
+    </div>
+
+    <div id="tags-wrap" class="tags-wrap"></div>
+
+    <div class="preview-wrap">
+      <div id="preview-content" class="preview-content"></div>
+    </div>
+
+    <div class="actions">
+      <button id="btn-copy" class="btn btn-primary">
+        <span class="btn-icon">📋</span>
+        Copia MDX
+      </button>
+      <button id="btn-save" class="btn btn-ghost">
+        <span class="btn-icon">📂</span>
+        Scarica copia MDX
+      </button>
+    </div>
+    <button id="btn-new" class="btn btn-link">← Nuovo video</button>
+  </div>
+
+  <!-- Stato: errore -->
+  <div id="state-error" class="state hidden">
+    <div class="state-icon">❌</div>
+    <p class="state-title">Si è verificato un errore</p>
+    <p id="error-message" class="state-sub error-text"></p>
+    <div class="actions">
+      <button id="btn-retry" class="btn btn-primary">Riprova</button>
+      <button id="btn-settings-err" class="btn btn-ghost">Impostazioni</button>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <span id="footer-stats" class="footer-stats"></span>
+    <span class="footer-model">Gemini 2.5 Flash</span>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>

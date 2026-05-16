@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Codex_Chrome-PlugIn_YouTube-Learn — Impostazioni</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+
+  <div class="page">
+
+    <header class="page-header">
+      <div class="logo">
+        <span>📚</span>
+        <span class="logo-text">Codex_Chrome-PlugIn_YouTube-Learn — Impostazioni</span>
+      </div>
+      <span class="version">v2.0 RC1</span>
+    </header>
+
+    <div class="content">
+
+      <section class="hero-card">
+        <div>
+          <p class="hero-eyebrow">Control Room</p>
+          <h1 class="hero-title">Configura il tuo workspace di apprendimento</h1>
+          <p class="hero-desc">Questa pagina governa il comportamento del plugin: modello AI, formato output, modalità di studio e salvataggio locale.</p>
+        </div>
+        <div class="hero-grid">
+          <div class="hero-pill">
+            <strong>MDX unico</strong>
+            <span>Integrale, studio e sintesi nello stesso file</span>
+          </div>
+          <div class="hero-pill">
+            <strong>Antigravity-ready</strong>
+            <span>Workflow e istruzioni operative generate automaticamente</span>
+          </div>
+          <div class="hero-pill">
+            <strong>Archivio locale</strong>
+            <span>Knowledge base personale senza backend obbligatorio</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── API Keys ── -->
+      <section class="card">
+        <h2 class="card-title">🔑 API Key</h2>
+        <p class="card-desc">
+          Codex_Chrome-PlugIn_YouTube-Learn usa <strong>Gemini 2.5 Flash</strong> (gratuito, 250 req/giorno).
+          Ottieni la tua chiave su <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>.
+        </p>
+
+        <div class="field">
+          <label class="label" for="gemini-key">Gemini API Key *</label>
+          <div class="input-group">
+            <input type="password" id="gemini-key" class="input" placeholder="AIza...">
+            <button id="toggle-key" class="btn-icon-sm" title="Mostra/nascondi">👁</button>
+            <button id="test-key" class="btn btn-ghost btn-sm">Test</button>
+          </div>
+          <p id="key-feedback" class="field-hint hidden"></p>
+        </div>
+
+        <div class="field">
+          <label class="label" for="youtube-key">YouTube Data API v3 Key <span style="font-weight:400;color:#868e96">(opzionale)</span></label>
+          <div class="input-group">
+            <input type="password" id="youtube-key" class="input" placeholder="Stessa chiave Gemini o chiave separata da Google Cloud">
+            <button id="toggle-yt-key" class="btn-icon-sm" title="Mostra/nascondi">👁</button>
+            <button id="test-yt-key" class="btn btn-ghost btn-sm">Test</button>
+          </div>
+          <p id="yt-key-feedback" class="field-hint hidden"></p>
+          <p class="field-hint">Per avatar del canale, iscritti, numero video e paese dei creator. Richiede YouTube Data API v3 attiva nel progetto Google Cloud. <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank">Attiva qui →</a></p>
+        </div>
+
+        <div class="field">
+          <label class="label" for="model-select">Modello LLM</label>
+          <select id="model-select" class="input input-select">
+            <option value="gemini-2.5-flash">Gemini 2.5 Flash (gratuito · consigliato)</option>
+            <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite (gratuito · più veloce)</option>
+            <option value="gemini-2.5-pro">Gemini 2.5 Pro (gratuito · più preciso)</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- ── Lingua ── -->
+      <section class="card">
+        <h2 class="card-title">🌍 Lingua Output</h2>
+        <p class="card-desc">In quale lingua vuoi i Learning MDX generati?</p>
+
+        <div class="field">
+          <label class="label">Lingua predefinita</label>
+          <div class="radio-group">
+            <label class="radio-item">
+              <input type="radio" name="language" value="it" checked>
+              <span>🇮🇹 Italiano (predefinito)</span>
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="language" value="auto">
+              <span>🌐 Automatico (segue la lingua di sistema: <strong id="sys-lang"></strong>)</span>
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="language" value="en">
+              <span>🇬🇧 English</span>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">🧠 Output Learning MDX</h2>
+        <p class="card-desc">
+          Il nuovo export genera un file <code>.mdx</code> unico con tre livelli: trascrizione integrale, studio guidato e sintesi rapida, più mappa concettuale.
+        </p>
+
+        <div class="field">
+          <label class="label" for="default-learning-mode">Modalità iniziale evidenziata</label>
+          <select id="default-learning-mode" class="input input-select">
+            <option value="verbatim">1. Trascrizione integrale</option>
+            <option value="study" selected>2. Studio guidato</option>
+            <option value="summary">3. Sintesi rapida</option>
+          </select>
+          <p class="field-hint">Il file contiene sempre tutte e 3 le modalità. Questa preferenza controlla quale sezione viene proposta come punto di ingresso.</p>
+        </div>
+
+        <div class="field">
+          <label class="label" for="output-format">Formato file</label>
+          <select id="output-format" class="input input-select">
+            <option value="mdx" selected>.mdx consigliato</option>
+          </select>
+          <p class="field-hint">MDX permette struttura più ricca, blocchi HTML/MDX, navigazione interna e future estensioni interattive.</p>
+        </div>
+      </section>
+
+      <!-- ── Salvataggio ── -->
+      <section class="card">
+        <h2 class="card-title">💾 Salvataggio File</h2>
+        <p class="card-desc">
+          I file <code>.mdx</code> vengono scaricati nella cartella <code>LearningHub/</code> dentro la tua cartella Download.
+          Opzionalmente puoi collegare direttamente il tuo vault Obsidian.
+        </p>
+
+        <div class="field">
+          <label class="label">Cartella Obsidian Vault (opzionale)</label>
+          <div class="input-group">
+            <input type="text" id="obsidian-path" class="input" placeholder="Nessuna cartella selezionata" readonly>
+            <button id="btn-pick-folder" class="btn btn-ghost btn-sm">📂 Scegli cartella</button>
+            <button id="btn-clear-folder" class="btn btn-ghost btn-sm" title="Rimuovi">✕</button>
+          </div>
+          <p class="field-hint">
+            Usa <strong>File System Access API</strong>: il browser chiede il permesso una sola volta.
+            I file vengono poi salvati automaticamente nella cartella scelta.
+          </p>
+        </div>
+
+        <div class="field">
+          <label class="toggle-wrap">
+            <input type="checkbox" id="toggle-obsidian">
+            <span class="toggle-label">Salva direttamente in Obsidian (richiede cartella selezionata)</span>
+          </label>
+        </div>
+      </section>
+
+      <!-- ── Struttura MD ── -->
+      <section class="card">
+        <h2 class="card-title">📄 Struttura Markdown</h2>
+        <p class="card-desc">Scegli le sezioni da includere nel riepilogo generato.</p>
+
+        <div class="checkboxes">
+          <label class="check-item">
+            <input type="checkbox" name="section" value="summary" checked disabled>
+            <span>📋 Riepilogo Generale <span class="badge-req">obbligatorio</span></span>
+          </label>
+          <label class="check-item">
+            <input type="checkbox" name="section" value="chapters" checked disabled>
+            <span>📚 Capitoli e Sottocapitoli <span class="badge-req">obbligatorio</span></span>
+          </label>
+          <label class="check-item">
+            <input type="checkbox" name="section" value="prerequisites" checked>
+            <span>🎯 Prerequisiti</span>
+          </label>
+          <label class="check-item">
+            <input type="checkbox" name="section" value="tools" checked>
+            <span>🛠️ Tool e Software Citati</span>
+          </label>
+          <label class="check-item">
+            <input type="checkbox" name="section" value="code" checked>
+            <span>💻 Codice e Comandi</span>
+          </label>
+          <label class="check-item">
+            <input type="checkbox" name="section" value="takeaways" checked>
+            <span>🔑 Punti Chiave e Takeaway</span>
+          </label>
+          <label class="check-item">
+            <input type="checkbox" name="section" value="blueprint" checked>
+            <span>🔄 Blueprint per Replicazione</span>
+          </label>
+          <label class="check-item">
+            <input type="checkbox" name="section" value="antigravity" checked>
+            <span>🤖 Note per Automazione Google Antigravity</span>
+          </label>
+          <label class="check-item">
+            <input type="checkbox" name="section" value="resources" checked>
+            <span>📎 Risorse e Link Menzionati</span>
+          </label>
+        </div>
+      </section>
+
+      <!-- ── Scorciatoie Tastiera ── -->
+      <section class="card">
+        <h2 class="card-title">⌨️ Scorciatoie Tastiera</h2>
+        <p class="card-desc">
+          Le scorciatoie permettono di agire senza aprire il popup. Chrome gestisce direttamente le combinazioni di tasti — puoi modificarle dalla pagina dedicata.
+        </p>
+
+        <div class="shortcuts-list">
+          <div class="shortcut-row">
+            <div class="shortcut-info">
+              <span class="shortcut-label">Aggiungi video alla coda</span>
+              <span class="shortcut-desc">Su qualsiasi video YouTube, aggiunge il video alla coda senza aprire il popup né avviare l'analisi AI.</span>
+            </div>
+            <div class="shortcut-keys" id="shortcut-queue">
+              <span class="shortcut-badge">⌘ Cmd</span>
+              <span class="shortcut-sep">+</span>
+              <span class="shortcut-badge">⇧ Shift</span>
+              <span class="shortcut-sep">+</span>
+              <span class="shortcut-badge">P</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="field" style="margin-top:14px">
+          <p class="field-hint" style="margin-bottom:8px">
+            ⚠️ Chrome non permette alle estensioni di cambiare le scorciatoie direttamente — devi farlo dalla pagina di sistema.
+          </p>
+          <button id="btn-open-shortcuts" class="btn btn-ghost btn-sm">
+            🔗 Modifica scorciatoie → chrome://extensions/shortcuts
+          </button>
+          <p id="shortcut-detected" class="field-hint" style="margin-top:8px"></p>
+        </div>
+      </section>
+
+      <!-- ── Auto-Queue ── -->
+      <section class="card">
+        <h2 class="card-title">📥 Auto-Queue</h2>
+        <p class="card-desc">
+          Codex_Chrome-PlugIn_YouTube-Learn può controllare automaticamente i feed dei creator che segui e accodare i nuovi video pubblicati dopo il follow.
+        </p>
+
+        <div class="field">
+          <label class="label" for="auto-queue-interval">Frequenza controllo automatico</label>
+          <select id="auto-queue-interval" class="input input-select">
+            <option value="off">Disattivato (solo manuale)</option>
+            <option value="6">Ogni 6 ore</option>
+            <option value="12" selected>Ogni 12 ore (consigliato)</option>
+            <option value="24">Ogni 24 ore</option>
+          </select>
+          <p class="field-hint">
+            Il controllo avviene in background anche quando il browser è aperto. I video vengono accodati e restano in attesa di estrazione.
+            Creator con <strong>priorità ⚡</strong> vengono estratti immediatamente; gli altri restano in coda.
+          </p>
+        </div>
+      </section>
+
+      <!-- ── Info ── -->
+      <section class="card card-info">
+        <h2 class="card-title">ℹ️ Come funziona</h2>
+        <ol class="how-list">
+          <li>Apri un video YouTube</li>
+          <li>Clicca l'icona 📚 Codex_Chrome-PlugIn_YouTube-Learn nella barra del browser</li>
+          <li>Scegli la modalità iniziale del file e premi <strong>Genera Learning MDX</strong></li>
+          <li>Gemini 2.5 Flash analizza la trascrizione e genera il documento multi-livello</li>
+          <li>Salva il file <code>.mdx</code> e trovalo nell'Archivio della Dashboard</li>
+          <li>Aggiungi creator dalla Dashboard per monitorare i loro nuovi video</li>
+        </ol>
+        <div class="readiness-list">
+          <div class="readiness-item">
+            <span>1</span>
+            <p>API key Gemini valida e modello selezionato</p>
+          </div>
+          <div class="readiness-item">
+            <span>2</span>
+            <p>Modalità iniziale e formato output confermati</p>
+          </div>
+          <div class="readiness-item">
+            <span>3</span>
+            <p>Vault Obsidian facoltativo, archivio locale sempre attivo</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Salva ── -->
+      <div class="save-bar">
+        <button id="btn-save" class="btn btn-primary btn-lg">💾 Salva Impostazioni</button>
+        <button id="btn-dashboard" class="btn btn-ghost">📊 Apri Dashboard</button>
+        <p id="save-feedback" class="save-feedback hidden"></p>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
