@@ -1,7 +1,8 @@
-// background.js — Service Worker MV3 — Learning Hub v2.0 RC1
+// background.js — Service Worker MV3 — Learning Hub v2.2.7
 
 importScripts(
   'schemas/app-schema.js',
+  'core/state-backup.js',
   'core/storage-migrations.js',
   'core/learning-document.js',
   'core/app-logger.js',
@@ -9,20 +10,100 @@ importScripts(
   'utils/transcript.js',
   'utils/storage.js',
   'utils/gemini.js',
+  'utils/openai.js',
+  'utils/ai-provider.js',
   'utils/markdown-generator.js',
   'utils/filesystem.js'
 );
 
 const appReady = initializeApp();
+const QUEUE_CONTEXT_MENU_ID = 'lh-add-queue-and-follow';
+const recentQueueActions = new Map();
+const RUNTIME_STATUS_KEY = 'runtimeStatus';
+const STATUS_PANEL_URL = chrome.runtime.getURL('status/status.html');
 
 async function initializeApp() {
   try {
     await Storage.ensureInitialized();
+    const restoreResult = await StateBackup.restoreIfNeeded();
+    await ensureContextMenus();
     AppLogger.info('Storage initialized', { schemaVersion: AppSchema.VERSION });
+    AppLogger.info('State backup checked', restoreResult);
   } catch (error) {
     AppLogger.error('Storage initialization failed', error);
     throw error;
   }
+}
+
+async function getStatusPanelTab() {
+  const tabs = await chrome.tabs.query({ url: STATUS_PANEL_URL });
+  return tabs[0] || null;
+}
+
+async function ensureStatusPanel(anchorWindowId = null) {
+  const existing = await getStatusPanelTab();
+  if (existing) return existing;
+  let left = 0;
+  let top = 80;
+  try {
+    const win = anchorWindowId
+      ? await chrome.windows.get(anchorWindowId)
+      : await chrome.windows.getLastFocused();
+    left = Math.max(0, (win.left || 0) + Math.max(0, (win.width || 1200) - 390));
+    top = Math.max(0, (win.top || 0) + 86);
+  } catch {}
+  const created = await chrome.windows.create({
+    url: STATUS_PANEL_URL,
+    type: 'popup',
+    focused: false,
+    width: 360,
+    height: 190,
+    left,
+    top,
+  });
+  return created.tabs?.[0] || null;
+}
+
+async function updateRuntimeStatus(status = {}, anchorWindowId = null) {
+  const next = {
+    kind: 'info',
+    kicker: 'Operazione in corso',
+    title: 'Aggiornamento…',
+    detail: '',
+    progress: 0,
+    phase: 'idle',
+    icon: '📚',
+    updatedAt: Date.now(),
+    autoCloseAt: null,
+    ...status,
+  };
+  await chrome.storage.local.set({ [RUNTIME_STATUS_KEY]: next });
+  await ensureStatusPanel(anchorWindowId);
+}
+
+async function completeRuntimeStatus(status = {}, anchorWindowId = null) {
+  await updateRuntimeStatus({
+    kind: 'success',
+    kicker: 'Operazione completata',
+    progress: 100,
+    phase: 'done',
+    icon: '✅',
+    autoCloseAt: Date.now() + 5000,
+    ...status,
+  }, anchorWindowId);
+}
+
+async function failRuntimeStatus(error, anchorWindowId = null) {
+  await updateRuntimeStatus({
+    kind: 'error',
+    kicker: 'Operazione non riuscita',
+    title: 'Errore',
+    detail: error?.message || String(error || 'Errore sconosciuto'),
+    progress: 100,
+    phase: 'error',
+    icon: '⚠️',
+    autoCloseAt: Date.now() + 7000,
+  }, anchorWindowId);
 }
 
 // ── Message Router ────────────────────────────────────────────────────────────
@@ -35,7 +116,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
-async function handleMessage(message) {
+async function handleMessage(message, sender) {
   switch (message.action) {
     case 'GENERATE_SUMMARY':        return await generateSummary(message.videoData, message.generationOptions || {});
     case 'SAVE_SUMMARY':            return await saveSummary(message.summary, message.rawMarkdown, message.generationOptions || {});
@@ -77,6 +158,7 @@ async function handleMessage(message) {
     case 'ANALYZE_CHANNEL_MASS_QUEUE': return await analyzeChannelForMassQueue(message.channelId, message.options || {});
     case 'QUEUE_CHANNEL_MASS':      return await queueChannelMass(message.channelId, message.filters || {});
     case 'SETUP_AUTO_QUEUE_ALARM':  setupAutoQueueAlarm(message.intervalHours); return { success: true };
+    case 'QUEUE_SHORTCUT_TARGET':   return await queueShortcutTarget(message.targetUrl || '', sender?.tab || null);
     default: throw new Error(`Azione non riconosciuta: ${message.action}`);
   }
 }
@@ -88,39 +170,56 @@ chrome.commands.onCommand.addListener(async (command) => {
 
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.url?.includes('youtube.com/watch')) {
-      showNotification('Codex_Chrome-PlugIn_YouTube-Learn', 'Apri un video YouTube per aggiungerlo alla coda.');
+    if (!tab?.url?.includes('youtube.com/')) {
+      showNotification('Codex_Chrome-PlugIn_YouTube-Learn', 'Apri YouTube e posizionati su un video o una miniatura.');
       return;
     }
 
-    // Leggi dati video dalla pagina
-    const [res] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      world: 'MAIN',
-      func: extractPageVideoDataForQueue,
-    });
-    const pageData = res?.result;
-    if (!pageData?.videoId) {
-      showNotification('Codex_Chrome-PlugIn_YouTube-Learn ⚠️', 'Impossibile leggere il video. Ricarica la pagina.');
+    await updateRuntimeStatus({
+      kind: 'info',
+      kicker: 'Messa in coda',
+      title: 'Avvio scorciatoia',
+      detail: 'Ricerca del video target dalla pagina YouTube.',
+      progress: 8,
+      phase: 'queue-start',
+      icon: '🕐',
+    }, tab?.windowId || null);
+
+    const targetUrl = await resolveShortcutTargetUrl(tab);
+    if (!targetUrl) {
+      await failRuntimeStatus(new Error('Nessun video YouTube rilevato dalla scorciatoia.'), tab?.windowId || null);
+      showNotification('Codex_Chrome-PlugIn_YouTube-Learn ⚠️', 'Sposta il mouse sopra una miniatura video oppure apri il video prima di usare la scorciatoia.');
       return;
     }
 
-    const result = await addToQueue(pageData);
-    if (result.success) {
-      // Toast + suono nella pagina
-      chrome.tabs.sendMessage(tab.id, {
-        action: 'SHOW_QUEUE_TOAST',
-        status: 'success',
-        title: pageData.title,
-      }).catch(() => {}); // silenzioso se content script non risponde
-    } else if (result.reason === 'already_exists') {
-      chrome.tabs.sendMessage(tab.id, {
-        action: 'SHOW_QUEUE_TOAST',
-        status: 'already',
-        title: pageData.title,
-      }).catch(() => {});
-    }
+    await queueVideoFromUrl(targetUrl, tab);
   } catch (e) {
+    await failRuntimeStatus(e, tab?.windowId || null);
+    showNotification('Codex_Chrome-PlugIn_YouTube-Learn ❌', e.message);
+  }
+});
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId !== QUEUE_CONTEXT_MENU_ID) return;
+  try {
+    await updateRuntimeStatus({
+      kind: 'info',
+      kicker: 'Messa in coda',
+      title: 'Azione dal menu contestuale',
+      detail: 'Lettura del link video selezionato.',
+      progress: 10,
+      phase: 'queue-start',
+      icon: '🕐',
+    }, tab?.windowId || null);
+    const targetUrl = resolveContextMenuTargetUrl(info, tab);
+    if (!targetUrl) {
+      await failRuntimeStatus(new Error('Nessun video YouTube rilevato dal menu contestuale.'), tab?.windowId || null);
+      showNotification('Codex_Chrome-PlugIn_YouTube-Learn ⚠️', 'Nessun video YouTube rilevato dal menu contestuale.');
+      return;
+    }
+    await queueVideoFromUrl(targetUrl, tab);
+  } catch (e) {
+    await failRuntimeStatus(e, tab?.windowId || null);
     showNotification('Codex_Chrome-PlugIn_YouTube-Learn ❌', e.message);
   }
 });
@@ -171,17 +270,52 @@ async function extractPageVideoDataForQueue() {
   return null;
 }
 
+function extractPreferredYouTubeTargetUrl() {
+  try {
+    if (location.href.includes('/watch?v=')) return location.href;
+
+    const activeAnchor = document.activeElement?.closest?.('a[href]');
+    if (activeAnchor?.href) return activeAnchor.href;
+
+    const hoveredAnchors = [...document.querySelectorAll('a[href*="/watch?"], a[href*="/shorts/"], a[href*="youtu.be/"]')];
+    const hovered = hoveredAnchors.find(a => a.matches(':hover'));
+    if (hovered?.href) return hovered.href;
+
+    return '';
+  } catch {
+    return '';
+  }
+}
+
 // ── Aggiungi alla coda (senza estrarre) ──────────────────────────────────────
 
 async function addToQueue(videoData) {
   const summaries = await Storage.getSummaries();
   const exists = summaries.find(s => s.videoId === videoData.videoId);
-  if (exists) return { success: false, reason: 'already_exists' };
+  if (exists) {
+    const creators = await Storage.getCreators();
+    const alreadyFollowed = videoData.channelId
+      ? creators.some(c => c.channelId === videoData.channelId)
+      : false;
+    return {
+      success: false,
+      reason: 'already_exists',
+      videoQueued: true,
+      creatorAdded: false,
+      creatorFollowed: alreadyFollowed,
+    };
+  }
+  const settings = await Storage.getSettings();
+  const tags = await ensureVideoTags(videoData, settings);
+  const tagGraph = buildTagMapGraph(tags, videoData);
   const duration = parseInt(videoData.duration || 0, 10);
   const liveBroadcastContent = videoData.liveBroadcastContent || (videoData.isLive ? 'live' : 'none');
   const saved = await Storage.saveSummary(LearningDocument.buildPendingSummary({
     ...videoData,
     url: `https://youtube.com/watch?v=${videoData.videoId}`,
+    tags,
+    mapTags: tags,
+    tagGraph,
     duration,
     liveBroadcastContent,
     contentType: videoData.contentType || classifyQueueContentType({ durationSec: duration, liveBroadcastContent }),
@@ -190,9 +324,12 @@ async function addToQueue(videoData) {
   }));
 
   // ── Auto-follow: se il creator non è ancora seguito, aggiungilo ──
+  let creatorAdded = false;
+  let creatorFollowed = false;
   if (videoData.channelId) {
     const creators = await Storage.getCreators();
     const alreadyFollowed = creators.some(c => c.channelId === videoData.channelId);
+    creatorFollowed = alreadyFollowed;
     if (!alreadyFollowed && videoData.channelName) {
       await Storage.addCreator({
         channelId:   videoData.channelId,
@@ -203,10 +340,19 @@ async function addToQueue(videoData) {
         stats:       null,
         // followedAt impostato da Storage.addCreator
       });
+      creatorAdded = true;
+      creatorFollowed = true;
     }
   }
 
-  return { success: true, id: saved.id };
+  return {
+    success: true,
+    id: saved.id,
+    videoQueued: true,
+    creatorAdded,
+    creatorFollowed,
+    tags,
+  };
 }
 
 // ── Estrazione in background (da dashboard, senza aprire popup) ───────────────
@@ -214,6 +360,7 @@ async function addToQueue(videoData) {
 async function startBackgroundExtraction(id) {
   // Risponde subito, esegue in background
   doBackgroundExtraction(id).catch(err => {
+    failRuntimeStatus(err).catch(() => {});
     showNotification('Codex_Chrome-PlugIn_YouTube-Learn ❌', `Errore estrazione: ${err.message}`);
   });
   return { success: true, queued: true };
@@ -224,8 +371,18 @@ async function doBackgroundExtraction(id) {
   const pending   = summaries.find(s => s.id === id);
   if (!pending) throw new Error('Riepilogo non trovato');
 
+  await updateRuntimeStatus({
+    kind: 'info',
+    kicker: 'Estrazione in corso',
+    title: pending.title || 'Estrazione video',
+    detail: 'Preparazione ambiente e verifica impostazioni.',
+    progress: 6,
+    phase: 'extract-init',
+    icon: '📚',
+  });
+
   const settings = await Storage.getSettings();
-  if (!settings.geminiApiKey) throw new Error('API key Gemini non configurata. Vai nelle Impostazioni.');
+  AIProvider.requireApiKey(settings);
 
   // Apri tab YouTube in background (non attivo)
   const tab = await new Promise(resolve =>
@@ -233,10 +390,26 @@ async function doBackgroundExtraction(id) {
   );
 
   try {
+    await updateRuntimeStatus({
+      kicker: 'Estrazione in corso',
+      title: pending.title || 'Estrazione video',
+      detail: 'Apertura pagina video in finestra nascosta.',
+      progress: 16,
+      phase: 'extract-open-hidden',
+      icon: '📚',
+    }, tab.windowId || null);
     // Aspetta caricamento completo + 2s per il JS della pagina
     await waitForTabLoad(tab.id, 25000);
     await delay(2000);
 
+    await updateRuntimeStatus({
+      kicker: 'Estrazione in corso',
+      title: pending.title || 'Estrazione video',
+      detail: 'Lettura metadati e tracce sottotitoli.',
+      progress: 28,
+      phase: 'extract-page-data',
+      icon: '📚',
+    }, tab.windowId || null);
     // Estrai dati video dalla pagina
     const [res] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
@@ -258,6 +431,14 @@ async function doBackgroundExtraction(id) {
     let transcriptSegments = [];
     let transcriptQuality = null;
     if (track) {
+      await updateRuntimeStatus({
+        kicker: 'Estrazione in corso',
+        title: pending.title || 'Estrazione video',
+        detail: 'Scaricamento e costruzione della trascrizione.',
+        progress: 42,
+        phase: 'extract-transcript',
+        icon: '📝',
+      }, tab.windowId || null);
       try {
         const captionData = await fetchCaption(track.baseUrl, pageData.chapters || []);
         transcript = captionData.transcript;
@@ -269,8 +450,31 @@ async function doBackgroundExtraction(id) {
     const videoData = { ...pageData, transcript, transcriptSegments, transcriptQuality, captionLang: track?.languageCode, captionType: track?.kind };
 
     // Genera summary
-    const markdown = await GeminiAPI.generateSummary(videoData, settings);
-    const tags     = await GeminiAPI.extractTags(videoData.title, videoData.description, settings.geminiApiKey, settings.model);
+    await updateRuntimeStatus({
+      kicker: 'Estrazione in corso',
+      title: pending.title || 'Estrazione video',
+      detail: 'Generazione del workspace MDX.',
+      progress: 62,
+      phase: 'extract-mdx',
+      icon: '✨',
+    }, tab.windowId || null);
+    const aiSections = await AIProvider.generateLearningSections(videoData, settings);
+    const learningMode = pending.learningMode || settings.defaultLearningMode || 'study';
+    const markdown = MarkdownGenerator.buildLearningDocument(
+      { ...videoData, learningMode, outputFormat: settings.outputFormat || 'mdx' },
+      aiSections,
+      { learningMode }
+    );
+    await updateRuntimeStatus({
+      kicker: 'Estrazione in corso',
+      title: pending.title || 'Estrazione video',
+      detail: 'Generazione tag e mappa del contenuto.',
+      progress: 78,
+      phase: 'extract-tags-map',
+      icon: '🏷️',
+    }, tab.windowId || null);
+    const tags = await ensureVideoTags(videoData, settings);
+    const tagGraph = buildTagMapGraph(tags, videoData);
 
     const fullMarkdown = MarkdownGenerator.addFrontmatter(markdown, { ...pending, tags }, tags);
     const pubDate      = pending.publishDate || pageData.publishDate || new Date().toISOString().slice(0, 10);
@@ -283,9 +487,17 @@ async function doBackgroundExtraction(id) {
       pubDate
     );
 
+    await updateRuntimeStatus({
+      kicker: 'Estrazione in corso',
+      title: pending.title || 'Estrazione video',
+      detail: 'Salvataggio file e aggiornamento archivio.',
+      progress: 92,
+      phase: 'extract-save',
+      icon: '💾',
+    }, tab.windowId || null);
     // Aggiorna entry da pending → extracted
     await Storage.updateSummaryById(id, {
-      status: 'extracted', markdown, fullMarkdown, tags,
+      status: 'extracted', markdown, fullMarkdown, tags, mapTags: tags, tagGraph,
       downloadId, savedFilename,
       publishDate: pubDate,
       viewCount: pageData.viewCount || pending.viewCount || 0,
@@ -296,6 +508,11 @@ async function doBackgroundExtraction(id) {
     });
     await Storage.incrementStat();
 
+    await completeRuntimeStatus({
+      title: pending.title || 'Estrazione video',
+      detail: 'Estratto, taggato e salvato correttamente.',
+      icon: '✅',
+    }, tab.windowId || null);
     showNotification('📚 Codex_Chrome-PlugIn_YouTube-Learn — Completato!', `"${pending.title?.slice(0,50)}" estratto e salvato.`);
 
   } finally {
@@ -351,17 +568,14 @@ async function fetchCaption(baseUrl, chapters = []) {
 
 function msTs(ms) {
   const s = Math.floor(ms/1000), m = Math.floor(s/60), h = Math.floor(m/60);
-  return h > 0
-    ? `${h}:${String(m%60).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`
-    : `${m}:${String(s%60).padStart(2,'0')}`;
+  return `${String(h).padStart(2,'0')}:${String(m%60).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
 }
 
 // ── Generazione Riepilogo (dal popup) ────────────────────────────────────────
 
 async function generateSummary(videoData, generationOptions = {}) {
   const settings = await Storage.getSettings();
-  if (!settings.geminiApiKey)
-    throw new Error('API key Gemini non configurata. Vai nelle Impostazioni.');
+  AIProvider.requireApiKey(settings);
 
   const transcriptQuality = videoData.transcriptQuality
     || Transcript.assessTranscriptQuality(videoData.transcriptSegments || [], {
@@ -376,7 +590,7 @@ async function generateSummary(videoData, generationOptions = {}) {
   };
 
   chrome.runtime.sendMessage({ action: 'SUMMARY_PROGRESS', step: 'generating', percent: 20 }).catch(() => {});
-  const aiSections = await GeminiAPI.generateLearningSections(enrichedVideoData, settings);
+  const aiSections = await AIProvider.generateLearningSections(enrichedVideoData, settings);
   const learningMode = generationOptions.learningMode || settings.defaultLearningMode || 'study';
   const markdown = MarkdownGenerator.buildLearningDocument(
     { ...enrichedVideoData, learningMode, outputFormat: settings.outputFormat || 'mdx' },
@@ -385,7 +599,7 @@ async function generateSummary(videoData, generationOptions = {}) {
   );
 
   chrome.runtime.sendMessage({ action: 'SUMMARY_PROGRESS', step: 'extracting_tags', percent: 80 }).catch(() => {});
-  const tags = await GeminiAPI.extractTags(videoData.title, videoData.description, settings.geminiApiKey, settings.model);
+  const tags = await ensureVideoTags(videoData, settings);
 
   return { success: true, markdown, tags, transcriptQuality };
 }
@@ -432,8 +646,9 @@ async function saveMarkdownFile(content, channelName, title, publishDate) {
 // ── Salvataggio con struttura gerarchica ──────────────────────────────────────
 
 async function saveSummary(summaryMeta, rawMarkdown, generationOptions = {}) {
-  const tags         = summaryMeta.tags || [];
   const settings = await Storage.getSettings();
+  const tags = await ensureVideoTags(summaryMeta, settings);
+  const tagGraph = buildTagMapGraph(tags, summaryMeta);
   const learningMode = generationOptions.learningMode || settings.defaultLearningMode || 'study';
   const outputFormat = settings.outputFormat || 'mdx';
   const fullMarkdown = MarkdownGenerator.addFrontmatter(
@@ -461,6 +676,8 @@ async function saveSummary(summaryMeta, rawMarkdown, generationOptions = {}) {
       ...existing,
       ...summaryMeta,
       tags,
+      mapTags: tags,
+      tagGraph,
       learningMode,
       outputFormat,
       viewCount: summaryMeta.viewCount || 0,
@@ -474,6 +691,8 @@ async function saveSummary(summaryMeta, rawMarkdown, generationOptions = {}) {
     saved = await Storage.saveSummary(LearningDocument.buildExtractedSummary({
       ...summaryMeta,
       tags,
+      mapTags: tags,
+      tagGraph,
       url: `https://youtube.com/watch?v=${summaryMeta.videoId}`,
       platform: 'youtube',
       thumbnail: `https://i.ytimg.com/vi/${summaryMeta.videoId}/mqdefault.jpg`,
@@ -1044,6 +1263,236 @@ async function showDownloadFile(id) {
 
 // ── Estrazione multipla (bulk) ────────────────────────────────────────────────
 
+async function ensureContextMenus() {
+  await chrome.contextMenus.removeAll();
+  chrome.contextMenus.create({
+    id: QUEUE_CONTEXT_MENU_ID,
+    title: 'Codex: accoda video + segui creator',
+    contexts: ['link', 'image', 'page', 'video'],
+    documentUrlPatterns: ['*://*.youtube.com/*'],
+  });
+}
+
+async function queueVideoFromUrl(targetUrl, sourceTab) {
+  if (shouldSkipDuplicateQueue(sourceTab?.id, targetUrl)) {
+    return { success: true, skippedDuplicate: true };
+  }
+  await updateRuntimeStatus({
+    kind: 'info',
+    kicker: 'Messa in coda',
+    title: 'Risoluzione video',
+    detail: 'Recupero metadati del video selezionato.',
+    progress: 20,
+    phase: 'queue-fetch-video',
+    icon: '🕐',
+  }, sourceTab?.windowId || null);
+  const pageData = await fetchQueueVideoDataFromUrl(targetUrl, sourceTab);
+  if (!pageData?.videoId) throw new Error('Impossibile leggere il video target.');
+
+  await updateRuntimeStatus({
+    kind: 'info',
+    kicker: 'Messa in coda',
+    title: pageData.title || 'Video rilevato',
+    detail: 'Analisi tag, coda video e verifica creator.',
+    progress: 64,
+    phase: 'queue-enrich',
+    icon: '🏷️',
+  }, sourceTab?.windowId || null);
+  const result = await addToQueue(pageData);
+  const notifyTabId = sourceTab?.id || null;
+  await completeRuntimeStatus({
+    title: pageData.title,
+    detail: result.success
+      ? (result.creatorAdded ? 'Video accodato e creator seguito.' : 'Video accodato correttamente.')
+      : (result.creatorFollowed ? 'Video già presente, creator già seguito.' : 'Video già presente in archivio.'),
+    kind: result.success ? 'success' : 'warning',
+    kicker: result.success ? 'Messa in coda completata' : 'Nessuna modifica',
+    icon: result.success ? '✅' : 'ℹ️',
+  }, sourceTab?.windowId || null);
+  if (notifyTabId) {
+    chrome.tabs.sendMessage(notifyTabId, {
+      action: 'SHOW_QUEUE_TOAST',
+      status: result.success ? 'success' : 'already',
+      title: pageData.title,
+      subtitle: result.success
+        ? (result.creatorAdded ? 'Video accodato e creator seguito' : 'Video accodato')
+        : (result.creatorFollowed ? 'Video già presente, creator già seguito' : 'Video già presente in archivio'),
+    }).catch(() => {});
+  }
+  return result;
+}
+
+async function queueShortcutTarget(targetUrl, sourceTab) {
+  if (!sourceTab?.url?.includes('youtube.com/')) {
+    return { success: false, error: 'Tab non YouTube' };
+  }
+  const resolved = normalizeYouTubeVideoUrl(targetUrl) || await resolveShortcutTargetUrl(sourceTab);
+  if (!resolved) throw new Error('Nessun video YouTube rilevato dalla scorciatoia.');
+  return queueVideoFromUrl(resolved, sourceTab);
+}
+
+async function fetchQueueVideoDataFromUrl(targetUrl, sourceTab) {
+  const normalizedUrl = normalizeYouTubeVideoUrl(targetUrl);
+  if (!normalizedUrl) return null;
+
+  if (sourceTab?.id && sourceTab.url && normalizeYouTubeVideoUrl(sourceTab.url) === normalizedUrl) {
+    const [res] = await chrome.scripting.executeScript({
+      target: { tabId: sourceTab.id },
+      world: 'MAIN',
+      func: extractPageVideoDataForQueue,
+    });
+    return res?.result || null;
+  }
+
+  const createdTab = await new Promise(resolve =>
+    chrome.tabs.create({
+      url: normalizedUrl,
+      active: false,
+      windowId: sourceTab?.windowId,
+      index: typeof sourceTab?.index === 'number' ? sourceTab.index + 1 : undefined,
+    }, resolve)
+  );
+
+  try {
+    await waitForTabLoad(createdTab.id, 25000);
+    await delay(1500);
+    const [res] = await chrome.scripting.executeScript({
+      target: { tabId: createdTab.id },
+      world: 'MAIN',
+      func: extractPageVideoDataForQueue,
+    });
+    return res?.result || null;
+  } finally {
+    chrome.tabs.remove(createdTab.id).catch(() => {});
+  }
+}
+
+async function resolveShortcutTargetUrl(tab) {
+  if (tab?.url?.includes('youtube.com/watch')) return normalizeYouTubeVideoUrl(tab.url);
+  const [res] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    world: 'MAIN',
+    func: extractPreferredYouTubeTargetUrl,
+  });
+  return normalizeYouTubeVideoUrl(res?.result || '');
+}
+
+function resolveContextMenuTargetUrl(info, tab) {
+  return normalizeYouTubeVideoUrl(info.linkUrl || info.srcUrl || tab?.url || '');
+}
+
+function shouldSkipDuplicateQueue(tabId, targetUrl) {
+  const key = `${tabId || 'global'}:${normalizeYouTubeVideoUrl(targetUrl) || targetUrl || ''}`;
+  const now = Date.now();
+  const last = recentQueueActions.get(key) || 0;
+  recentQueueActions.set(key, now);
+  for (const [entryKey, ts] of recentQueueActions.entries()) {
+    if (now - ts > 3000) recentQueueActions.delete(entryKey);
+  }
+  return now - last < 1500;
+}
+
+function normalizeYouTubeVideoUrl(url) {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    if (/youtu\.be$/i.test(parsed.hostname)) {
+      const id = parsed.pathname.split('/').filter(Boolean)[0];
+      return id ? `https://www.youtube.com/watch?v=${id}` : '';
+    }
+    if (!/youtube\.com$/i.test(parsed.hostname) && !/\.youtube\.com$/i.test(parsed.hostname)) return '';
+    if (parsed.pathname === '/watch') {
+      const id = parsed.searchParams.get('v');
+      return id ? `https://www.youtube.com/watch?v=${id}` : '';
+    }
+    const shorts = parsed.pathname.match(/^\/shorts\/([^/?#]+)/);
+    if (shorts) return `https://www.youtube.com/watch?v=${shorts[1]}`;
+    return '';
+  } catch {
+    return '';
+  }
+}
+
+function normalizeTagValue(tag = '') {
+  return String(tag || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[#"'`]/g, '')
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\s/g, '-');
+}
+
+function deriveFallbackTags(videoData = {}) {
+  const text = [
+    videoData.title || '',
+    videoData.description || '',
+    videoData.channelName || '',
+    videoData.contentType || '',
+    videoData.durationBucket || '',
+  ].join(' ').toLowerCase();
+  const stop = new Set(['the', 'and', 'for', 'with', 'this', 'that', 'sono', 'della', 'delle', 'degli', 'dello', 'alla', 'alle', 'agli', 'come', 'per', 'con', 'del', 'dei', 'nel', 'nella', 'nelle', 'sul', 'sulla', 'sulle', 'che', 'una', 'uno', 'gli', 'il', 'la', 'le', 'di', 'da', 'su', 'tra', 'fra', 'piu', 'meno', 'dopo', 'prima', 'your', 'from', 'into', 'about', 'video', 'tutorial']);
+  const words = text
+    .replace(/[^a-z0-9À-ÿ\s-]/gi, ' ')
+    .split(/\s+/)
+    .map(w => normalizeTagValue(w))
+    .filter(w => w && w.length >= 3 && !stop.has(w));
+  const scored = new Map();
+  words.forEach(word => scored.set(word, (scored.get(word) || 0) + 1));
+  const out = [];
+  const prioritized = [
+    normalizeTagValue(videoData.channelName),
+    normalizeTagValue(videoData.contentType),
+    normalizeTagValue(videoData.durationBucket),
+  ].filter(Boolean);
+  prioritized.forEach(tag => {
+    if (!out.includes(tag)) out.push(tag);
+  });
+  [...scored.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .forEach(([word]) => {
+      if (!out.includes(word) && out.length < 10) out.push(word);
+    });
+  const emergency = ['youtube', 'learning', 'studio-operativo'];
+  emergency.forEach(tag => {
+    if (!out.includes(tag) && out.length < 5) out.push(tag);
+  });
+  return out.slice(0, 10);
+}
+
+function normalizeTagSet(tags = [], videoData = {}) {
+  const normalized = [...new Set((tags || []).map(normalizeTagValue).filter(tag => tag && tag.length >= 2))];
+  if (normalized.length >= 5 && normalized.length <= 10) return normalized;
+  return deriveFallbackTags({ ...videoData, tags: normalized });
+}
+
+async function ensureVideoTags(videoData = {}, settings = null) {
+  const existing = normalizeTagSet(videoData.tags || videoData.mapTags || [], videoData);
+  if (existing.length >= 5 && existing.length <= 10) return existing;
+  let extracted = [];
+  try {
+    const providerSettings = settings || await Storage.getSettings();
+    if (AIProvider.hasApiKey(providerSettings)) {
+      extracted = await AIProvider.extractTags(videoData.title || '', videoData.description || '', providerSettings);
+    }
+  } catch {}
+  return normalizeTagSet(extracted, videoData);
+}
+
+function buildTagMapGraph(tags = [], videoData = {}) {
+  const normalizedTags = normalizeTagSet(tags, videoData);
+  const videoNodeId = `video:${videoData.videoId || normalizeTagValue(videoData.title || 'video')}`;
+  return {
+    nodes: [
+      { id: videoNodeId, type: 'video', label: videoData.title || 'Video' },
+      ...normalizedTags.map(tag => ({ id: `tag:${tag}`, type: 'tag', label: tag })),
+    ],
+    edges: normalizedTags.map(tag => ({ source: videoNodeId, target: `tag:${tag}` })),
+  };
+}
+
 async function extractAllPending(ids) {
   // Avvia tutte le estrazioni in sequenza (rate limit Gemini + non parallelizzare tab)
   let started = 0;
@@ -1436,26 +1885,25 @@ async function refreshAllCreators() {
 
 async function analyzeWebpage(articleData) {
   const settings = await Storage.getSettings();
-  if (!settings.geminiApiKey) throw new Error('API key Gemini non configurata.');
+  AIProvider.requireApiKey(settings);
 
   const platform = articleData.platform || 'web';
   const isInstagram = platform === 'instagram';
 
   // Genera il markdown con il prompt appropriato alla piattaforma
   const markdown = isInstagram
-    ? await GeminiAPI.generateInstagramSummary(articleData, settings)
-    : await GeminiAPI.generateArticleSummary(articleData, settings);
+    ? await AIProvider.generateInstagramSummary(articleData, settings)
+    : await AIProvider.generateArticleSummary(articleData, settings);
 
   // Estrai tag (titolo + caption/text iniziale)
   const tagSource = isInstagram
     ? (articleData.hashtags || []).join(', ') + ' ' + (articleData.caption || '').slice(0, 300)
     : (articleData.text || '').slice(0, 400);
 
-  const tags = await GeminiAPI.extractTags(
+  const tags = await AIProvider.extractTags(
     articleData.title,
     tagSource,
-    settings.geminiApiKey,
-    settings.model
+    settings
   );
 
   // Usa MarkdownGenerator per il frontmatter
@@ -1733,13 +2181,13 @@ async function chatQuery(question) {
     Storage.getSettings(),
     Storage.getSummaries(),
   ]);
-  if (!settings.geminiApiKey) throw new Error('API key Gemini non configurata. Vai nelle Impostazioni.');
+  AIProvider.requireApiKey(settings);
   if (!allSummaries?.length) return { success: true, answer: null, sources: [], noteCount: 0 };
 
   const summaries = allSummaries.filter(s => s.status === 'extracted' && s.markdown);
   if (!summaries.length) return { success: true, answer: null, sources: [], noteCount: 0 };
 
-  const { answer, sources } = await GeminiAPI.chatWithArchive(question, summaries, settings);
+  const { answer, sources } = await AIProvider.chatWithArchive(question, summaries, settings);
   return { success: true, answer, sources, noteCount: summaries.length };
 }
 
@@ -1755,16 +2203,15 @@ async function semanticSearch(query) {
     Storage.getSettings(),
     Storage.getSummaries(),
   ]);
-  if (!settings.geminiApiKey) throw new Error('API key Gemini non configurata.');
+  AIProvider.requireApiKey(settings);
 
   const summaries = allSummaries.filter(s => s.status === 'extracted');
   if (!summaries.length) return { success: true, rankedIds: [], noteCount: 0 };
 
-  const rankedIds = await GeminiAPI.semanticRank(
+  const rankedIds = await AIProvider.semanticRank(
     query,
     summaries.map(s => ({ id: s.id, title: s.title, channelName: s.channelName, tags: s.tags })),
-    settings.geminiApiKey,
-    settings.model
+    settings
   );
   return { success: true, rankedIds, noteCount: summaries.length };
 }
@@ -1786,7 +2233,7 @@ async function checkTopicsAndNotify(filterChannelId = null) {
   const creators  = await Storage.getCreators();
   const settings  = await Storage.getSettings();
 
-  if (!settings.geminiApiKey) return { success: false, reason: 'no_api_key' };
+  if (!AIProvider.hasApiKey(settings)) return { success: false, reason: 'no_api_key' };
 
   const notified   = await Storage.getNotifiedVideos();
   const newVideoIds = [];
@@ -1815,12 +2262,11 @@ async function checkTopicsAndNotify(filterChannelId = null) {
     for (const video of newVideos) {
       newVideoIds.push(video.videoId); // segna come valutato
 
-      const matches = await GeminiAPI.checkTopicMatch(
+      const matches = await AIProvider.checkTopicMatch(
         video.title,
         video.description,
         creator.topics,
-        settings.geminiApiKey,
-        settings.model || GeminiAPI.DEFAULT_MODEL
+        settings
       ).catch(() => false);
 
       if (matches) {
@@ -1847,5 +2293,10 @@ async function checkTopicsAndNotify(filterChannelId = null) {
 }
 
 chrome.runtime.onInstalled.addListener(details => {
+  ensureContextMenus().catch(() => {});
   if (details.reason === 'install') chrome.tabs.create({ url: chrome.runtime.getURL('options/options.html') });
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  ensureContextMenus().catch(() => {});
 });

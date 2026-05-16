@@ -223,7 +223,7 @@ const Transcript = {
       const chSegs  = segments.filter(s => s.startMs >= chStart && s.startMs < chEnd);
 
       result += `\n## ${chapters[i].title} [${this.msToTimestamp(chStart)}]\n`;
-      result += chSegs.map(s => s.text).join(' ') + '\n';
+      result += chSegs.map(s => `[${this.msToTimestamp(s.startMs)}] ${s.text}`).join('\n') + '\n';
     }
     return result;
   },
@@ -233,8 +233,7 @@ const Transcript = {
     const h = Math.floor(total / 3600);
     const m = Math.floor((total % 3600) / 60);
     const s = total % 60;
-    if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-    return `${m}:${String(s).padStart(2,'0')}`;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
   },
 
   formatSeconds(seconds) {

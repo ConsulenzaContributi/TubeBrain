@@ -1,19 +1,21 @@
 {
   "manifest_version": 3,
   "name": "Codex_Chrome-PlugIn_YouTube-Learn",
-  "version": "2.0.0",
+  "version": "2.2.7",
   "description": "Trasforma video YouTube in Learning MDX a 3 livelli con archivio, automazione e workflow per studio operativo.",
   "permissions": [
     "activeTab",
     "storage",
     "downloads",
     "scripting",
+    "contextMenus",
     "tabs",
     "notifications",
     "alarms"
   ],
   "host_permissions": [
     "*://*.youtube.com/*",
+    "*://api.openai.com/*",
     "*://generativelanguage.googleapis.com/*",
     "*://www.youtube.com/feeds/*",
     "*://www.googleapis.com/*",
@@ -24,7 +26,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://*.youtube.com/watch*"],
+      "matches": ["*://*.youtube.com/*"],
       "js": ["content-script.js"],
       "run_at": "document_idle"
     }
@@ -60,7 +62,7 @@
         "windows": "Ctrl+Shift+P",
         "linux": "Ctrl+Shift+P"
       },
-      "description": "Codex_Chrome-PlugIn_YouTube-Learn: Aggiungi video alla coda (senza estrarre)"
+      "description": "Codex_Chrome-PlugIn_YouTube-Learn: Accoda il video e segue il creator"
     }
   }
 }

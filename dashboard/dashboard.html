@@ -421,7 +421,7 @@
       <div class="tab-header">
         <div>
           <h1 class="tab-title">📖 Guida al Plugin</h1>
-          <p class="tab-sub">Codex_Chrome-PlugIn_YouTube-Learn v2.0 RC1 — Tutto quello che devi sapere</p>
+          <p class="tab-sub">Codex_Chrome-PlugIn_YouTube-Learn v2.2.7 — Tutto quello che devi sapere</p>
         </div>
       </div>
 
@@ -451,8 +451,8 @@
             <div class="guide-step">
               <div class="guide-step-num">1</div>
               <div class="guide-step-body">
-                <strong>Ottieni una API key Gemini</strong>
-                <p>Vai su <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a> e crea una chiave API gratuita. Gemini 2.5 Flash è gratuito fino a 250 richieste/giorno — più che sufficiente per uso personale.</p>
+                <strong>Configura un provider AI</strong>
+                <p>Puoi usare <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a> per Gemini oppure la tua API key OpenAI. Il provider attivo si gestisce nelle Impostazioni.</p>
               </div>
             </div>
             <div class="guide-step">
@@ -488,7 +488,7 @@
               <h3 class="guide-h3" style="margin:0">🤖 Gemini API Key — Google AI Studio</h3>
             </div>
             <p class="guide-p">Usata per: generare riepiloghi MD, chat con l'archivio, ricerca semantica, analisi articoli web, alert topic, estrazione tag.</p>
-            <p class="guide-p"><strong>Limite gratuito:</strong> 250 richieste/giorno con Gemini 2.5 Flash (più che sufficiente per uso personale).</p>
+            <p class="guide-p"><strong>Nota provider:</strong> Gemini resta il percorso gratuito più semplice; OpenAI è disponibile via API con runtime attuale forzato su <code>gpt-5.4-mini</code>.</p>
 
             <div class="guide-steps">
               <div class="guide-step">
@@ -846,7 +846,7 @@
               <tbody>
                 <tr><td><strong>Gemini API Key</strong> *</td><td>Obbligatoria. Gratuita su <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>. Usa il pulsante Test per verificarla prima di salvare.</td></tr>
                 <tr><td><strong>YouTube Data API v3 Key</strong></td><td>Opzionale. Abilita avatar, iscritti e statistiche nei creator. Richiede YouTube Data API v3 attiva nel progetto Google Cloud.</td></tr>
-                <tr><td><strong>Modello LLM</strong></td><td>Gemini 2.5 Flash (consigliato, gratuito), Flash-Lite (più veloce), Pro (più preciso ma più lento).</td></tr>
+                <tr><td><strong>Provider / modello</strong></td><td>Gemini 2.5 Flash/Flash-Lite/Pro oppure OpenAI GPT-5 family. In questa versione, OpenAI usa operativamente <code>gpt-5.4-mini</code>.</td></tr>
                 <tr><td><strong>Lingua Output</strong></td><td>Italiano, English, o Automatico (segue la lingua del sistema).</td></tr>
                 <tr><td><strong>Cartella Obsidian</strong></td><td>Se selezioni la cartella del tuo vault Obsidian, i file vengono salvati direttamente lì (oltre che in Download).</td></tr>
                 <tr><td><strong>Shortcut tastiera</strong></td><td>Configurabile in <a href="chrome://extensions/shortcuts" target="_blank">chrome://extensions/shortcuts</a>. Default: ⌘⇧P (Mac) / Ctrl+Shift+P (Win).</td></tr>

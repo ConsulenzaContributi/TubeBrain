@@ -41,9 +41,18 @@ body {
   background: var(--bg);
 }
 
-.logo { display: flex; align-items: center; gap: 7px; }
+.logo { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.logo-copy { display: flex; flex-direction: column; min-width: 0; }
 .logo-icon { font-size: 18px; }
 .logo-text { font-size: 14px; font-weight: 700; color: var(--primary); letter-spacing: -0.2px; }
+.logo-version {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text3);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-top: 1px;
+}
 
 .header-actions { display: flex; gap: 4px; }
 

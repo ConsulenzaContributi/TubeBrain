@@ -1,9 +1,9 @@
-# Release Candidate RC1
+# Release Notes v2.2.7
 
 ## Versione
 
-- prodotto: `v2.0 RC1`
-- manifest: `2.0.0`
+- prodotto: `v2.2.7`
+- manifest: `2.2.7`
 
 ## Scope incluso
 

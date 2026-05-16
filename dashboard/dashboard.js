@@ -1,4 +1,4 @@
-// dashboard.js — Learning Hub Dashboard Logic v2.0 RC1
+// dashboard.js — Learning Hub Dashboard Logic v2.2.7
 
 const $ = id => document.getElementById(id);
 const bg = (action, data = {}) => chrome.runtime.sendMessage({ action, ...data });
@@ -180,6 +180,7 @@ function bindButtons() {
   $('modal-export-txt')?.addEventListener('click', () => exportActiveSummary('txt', $('modal-export-txt')));
   $('modal-export-agent')?.addEventListener('click', () => exportActiveSummary('antigravity', $('modal-export-agent')));
   $('modal-delete').addEventListener('click', deleteActiveSummary);
+  $('modal-body').addEventListener('click', handleLearningInteractions);
   $('btn-batch-import')?.addEventListener('click', importBatchUrlsFromDashboard);
 
   // ── Event delegation: Archivio globale ───────────────────────────────────
@@ -1178,6 +1179,174 @@ function renderMarkdown(md, videoId) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 
+  function slugifyLabel(value) {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'item';
+  }
+
+  function splitTableRow(line) {
+    return line.split('|').filter((_, idx, arr) => idx > 0 && idx < arr.length - 1).map(cell => cell.trim());
+  }
+
+  function parseFlashcards(sectionBody) {
+    const lines = String(sectionBody || '').split('\n').map(l => l.trim()).filter(Boolean);
+    const tableLines = lines.filter(line => /^\|.+\|$/.test(line) && !/^\|[\s\-:|]+\|$/.test(line));
+    if (tableLines.length < 2) return null;
+    const rows = tableLines.slice(1).map(splitTableRow).filter(cols => cols.length >= 2);
+    if (!rows.length) return null;
+    return rows.map((cols, idx) => ({
+      id: `fc-${idx + 1}`,
+      question: cols[0] || '',
+      answer: cols[1] || '',
+      difficulty: cols[2] || '',
+    }));
+  }
+
+  function parseQuiz(sectionBody) {
+    const lines = String(sectionBody || '').split('\n');
+    const blocks = [];
+    let current = null;
+
+    const flush = () => {
+      if (!current) return;
+      if (current.question && current.options.length) blocks.push(current);
+      current = null;
+    };
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) continue;
+
+      const qMatch = line.match(/^\d+\.\s+(.+)/);
+      if (qMatch) {
+        flush();
+        current = { question: qMatch[1].replace(/^\*\*(.+)\*\*$/, '$1'), options: [], answer: '', explanation: '' };
+        continue;
+      }
+      if (!current) continue;
+
+      const optMatch = line.match(/^[-*]?\s*([A-D])[).:\-]\s+(.+)/i);
+      if (optMatch) {
+        current.options.push({ key: optMatch[1].toUpperCase(), text: optMatch[2] });
+        continue;
+      }
+
+      const answerMatch = line.match(/^(?:\*\*)?risposta(?:\s+corretta)?(?:\*\*)?\s*[:\-]\s*(.+)$/i);
+      if (answerMatch) {
+        current.answer = answerMatch[1].replace(/\*\*/g, '').trim();
+        continue;
+      }
+
+      const explanationMatch = line.match(/^(?:\*\*)?spiegazione(?:\*\*)?\s*[:\-]\s*(.+)$/i);
+      if (explanationMatch) {
+        current.explanation = explanationMatch[1].replace(/\*\*/g, '').trim();
+      }
+    }
+    flush();
+    return blocks.length ? blocks : null;
+  }
+
+  function renderFlashcardsHtml(cards) {
+    return [
+      '<section class="learning-block">',
+      '<h2 class="md-h2">Flashcard</h2>',
+      '<p class="learning-block-sub">Prova a rispondere mentalmente prima di scoprire la soluzione.</p>',
+      '<div class="flashcards-grid">',
+      ...cards.map(card => `
+        <article class="flashcard-item">
+          <div class="flashcard-head">
+            <span class="flashcard-badge">Flashcard</span>
+            ${card.difficulty ? `<span class="flashcard-difficulty">${inlineFormat(card.difficulty)}</span>` : ''}
+          </div>
+          <p class="flashcard-question">${inlineFormat(card.question)}</p>
+          <button class="btn btn-ghost btn-sm flashcard-toggle" data-action="toggle-flashcard-answer" data-target="${card.id}">👁️ Mostra risposta</button>
+          <div class="flashcard-answer hidden" id="${card.id}">
+            <p class="flashcard-answer-label">Risposta</p>
+            <p class="flashcard-answer-body">${inlineFormat(card.answer)}</p>
+          </div>
+        </article>
+      `),
+      '</div>',
+      '</section>',
+    ].join('');
+  }
+
+  function renderQuizHtml(questions) {
+    return [
+      '<section class="learning-block">',
+      '<h2 class="md-h2">Quiz finale</h2>',
+      '<p class="learning-block-sub">Seleziona una risposta e usa "Controlla" per verificare senza spoiler immediati.</p>',
+      '<div class="quiz-stack">',
+      ...questions.map((q, idx) => {
+        const answerKey = slugifyLabel((q.answer.match(/[A-D]/i) || [''])[0] || q.answer);
+        return `
+          <article class="quiz-item" data-answer="${answerKey}">
+            <p class="quiz-question">${idx + 1}. ${inlineFormat(q.question)}</p>
+            <div class="quiz-options">
+              ${q.options.map(opt => `
+                <button class="quiz-option" data-action="pick-quiz-option" data-value="${slugifyLabel(opt.key)}">
+                  <span class="quiz-option-key">${esc(opt.key)}</span>
+                  <span>${inlineFormat(opt.text)}</span>
+                </button>
+              `).join('')}
+            </div>
+            <div class="quiz-actions-row">
+              <button class="btn btn-primary btn-sm" data-action="check-quiz-answer">✅ Controlla risposta</button>
+              <button class="btn btn-ghost btn-sm hidden" data-action="toggle-quiz-solution">👁️ Mostra soluzione</button>
+            </div>
+            <div class="quiz-feedback hidden">
+              <p class="quiz-answer-line" data-answer-text="${esc(q.answer || 'N/D')}"><strong>Risposta corretta:</strong> ${inlineFormat(q.answer || 'N/D')}</p>
+              ${q.explanation ? `<p class="quiz-explanation"><strong>Spiegazione:</strong> ${inlineFormat(q.explanation)}</p>` : ''}
+            </div>
+          </article>
+        `;
+      }),
+      '</div>',
+      '</section>',
+    ].join('');
+  }
+
+  function injectInteractiveSections(markdown) {
+    const placeholders = [];
+    const save = html => {
+      const idx = placeholders.length;
+      placeholders.push(html);
+      return `\x00LEARN${idx}\x00`;
+    };
+
+    const sectionRe = /^##\s+(Flashcard|Quiz finale)\s*$/gmi;
+    const matches = [...markdown.matchAll(sectionRe)];
+    if (!matches.length) return { markdown, placeholders };
+
+    let out = '';
+    let cursor = 0;
+    for (let i = 0; i < matches.length; i++) {
+      const match = matches[i];
+      const start = match.index;
+      const end = i + 1 < matches.length ? matches[i + 1].index : markdown.length;
+      const section = markdown.slice(start, end);
+      const title = match[1].toLowerCase();
+      const body = section.replace(/^##\s+.+$/m, '').trim();
+      let html = '';
+
+      if (title === 'flashcard') {
+        const cards = parseFlashcards(body);
+        if (cards) html = renderFlashcardsHtml(cards);
+      } else if (title === 'quiz finale') {
+        const quiz = parseQuiz(body);
+        if (quiz) html = renderQuizHtml(quiz);
+      }
+
+      out += markdown.slice(cursor, start);
+      out += html ? save(html) : section;
+      cursor = end;
+    }
+    out += markdown.slice(cursor);
+    return { markdown: out, placeholders };
+  }
+
   // ── Inline formatter ───────────────────────────────────────────────────────
   // Processa il testo inline: code, bold, italic, link, timestamp
   // Ogni elemento viene salvato come placeholder per evitare doppio-escaping
@@ -1226,7 +1395,8 @@ function renderMarkdown(md, videoId) {
 
   // ── Fase 1: estrai blocchi codice → placeholder ────────────────────────────
   const codeBlocks = [];
-  let src = md.replace(/```(\w*)\r?\n?([\s\S]*?)```/g, (_, lang, code) => {
+  const interactive = injectInteractiveSections(md);
+  let src = interactive.markdown.replace(/```(\w*)\r?\n?([\s\S]*?)```/g, (_, lang, code) => {
     const idx      = codeBlocks.length;
     const safeLang = (lang || 'text').toLowerCase();
     const label    = safeLang.toUpperCase();
@@ -1274,6 +1444,13 @@ function renderMarkdown(md, videoId) {
       closeAll();
       const idx = +trim.replace(/\x00CODE(\d+)\x00/, '$1');
       out.push(codeBlocks[idx]);
+      continue;
+    }
+
+    if (/^\x00LEARN\d+\x00$/.test(trim)) {
+      closeAll();
+      const idx = +trim.replace(/\x00LEARN(\d+)\x00/, '$1');
+      out.push(interactive.placeholders[idx]);
       continue;
     }
 
@@ -1392,6 +1569,80 @@ window.openModal = (summary) => {
 function closeModal() {
   $('preview-modal').classList.add('hidden');
   activeSummary = null;
+}
+
+function handleLearningInteractions(e) {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+
+  if (btn.dataset.action === 'toggle-flashcard-answer') {
+    const target = document.getElementById(btn.dataset.target);
+    if (!target) return;
+    const hidden = target.classList.toggle('hidden');
+    btn.textContent = hidden ? '👁️ Mostra risposta' : '🙈 Nascondi risposta';
+    return;
+  }
+
+  if (btn.dataset.action === 'pick-quiz-option') {
+    const card = btn.closest('.quiz-item');
+    if (!card) return;
+    card.querySelectorAll('.quiz-option').forEach(el => el.classList.remove('selected'));
+    btn.classList.add('selected');
+    card.dataset.selected = btn.dataset.value || '';
+    return;
+  }
+
+  if (btn.dataset.action === 'check-quiz-answer') {
+    const card = btn.closest('.quiz-item');
+    if (!card) return;
+    const selected = card.dataset.selected || '';
+    if (!selected) return;
+
+    const answer = card.dataset.answer || '';
+    const correct = selected === answer;
+    const feedback = card.querySelector('.quiz-feedback');
+    const toggle = card.querySelector('[data-action="toggle-quiz-solution"]');
+
+    card.querySelectorAll('.quiz-option').forEach(el => {
+      const value = el.dataset.value || '';
+      el.classList.remove('correct', 'wrong');
+      if (value === selected) el.classList.add(correct ? 'correct' : 'wrong');
+    });
+
+    if (feedback) {
+      feedback.classList.remove('hidden');
+      feedback.classList.toggle('quiz-feedback-correct', correct);
+      feedback.classList.toggle('quiz-feedback-wrong', !correct);
+      if (!correct) feedback.classList.add('hidden');
+      const line = feedback.querySelector('.quiz-answer-line');
+      if (line) {
+        line.innerHTML = correct
+          ? '<strong>Corretto.</strong> Hai scelto la risposta giusta.'
+          : '<strong>Non corretta.</strong> Se vuoi, mostra la soluzione completa.';
+      }
+    }
+    if (toggle) {
+      toggle.classList.toggle('hidden', correct);
+      toggle.textContent = '👁️ Mostra soluzione';
+    }
+    return;
+  }
+
+  if (btn.dataset.action === 'toggle-quiz-solution') {
+    const card = btn.closest('.quiz-item');
+    const feedback = card?.querySelector('.quiz-feedback');
+    if (!feedback) return;
+    const answer = card.dataset.answer || '';
+    const line = feedback.querySelector('.quiz-answer-line');
+    if (line) {
+      line.innerHTML = `<strong>Risposta corretta:</strong> ${escHtml(line.dataset.answerText || 'N/D')}`;
+    }
+    card.querySelectorAll('.quiz-option').forEach(el => {
+      el.classList.toggle('correct', (el.dataset.value || '') === answer);
+    });
+    const hidden = feedback.classList.toggle('hidden');
+    btn.textContent = hidden ? '👁️ Mostra soluzione' : '🙈 Nascondi soluzione';
+  }
 }
 
 async function copyModalContent() {
@@ -1536,22 +1787,23 @@ function formatNumber(n) {
  * Nodi: tag (blu) + creator (verde). Edges: tag ↔ creator (co-occorrenza).
  */
 function buildMapData() {
-  const extracted = allSummaries.filter(s => s.status !== 'pending' && s.tags?.length);
-  if (extracted.length < 2) return null;
+  const mapped = allSummaries.filter(s => (s.mapTags || s.tags || []).length);
+  if (mapped.length < 2) return null;
 
   const tagCount     = {};   // tag → numero di video
   const tagCreators  = {};   // tag → Set<channelKey>
   const tagVideos    = {};   // tag → [{id, title, channelName}]
 
-  extracted.forEach(s => {
+  mapped.forEach(s => {
     const ckey = s.channelId || s.channelName || 'unknown';
-    (s.tags || []).forEach(tag => {
+    const summaryTags = s.mapTags?.length ? s.mapTags : (s.tags || []);
+    summaryTags.forEach(tag => {
       tagCount[tag] = (tagCount[tag] || 0) + 1;
       if (!tagCreators[tag]) tagCreators[tag] = new Set();
       tagCreators[tag].add(ckey);
       if (!tagVideos[tag]) tagVideos[tag] = [];
       if (tagVideos[tag].length < 8)
-        tagVideos[tag].push({ id: s.id, title: s.title, channelName: s.channelName });
+        tagVideos[tag].push({ id: s.id, title: s.title, channelName: s.channelName, status: s.status });
     });
   });
 
@@ -1803,7 +2055,7 @@ function onMapNodeClick(node, groupEl) {
   if (node.type === 'tag') {
     title.innerHTML = `🏷️ <strong>#${escHtml(node.label)}</strong> &nbsp;·&nbsp; ${node.count} video`;
     const chips = (node.videos || []).map(v =>
-      `<button class="map-video-chip" data-id="${v.id}">${escHtml(v.title.slice(0, 55))}</button>`
+      `<button class="map-video-chip" data-id="${v.id}" data-status="${v.status || ''}">${escHtml(v.title.slice(0, 55))}${v.status === 'pending' ? ' · coda' : ''}</button>`
     ).join('');
     body.innerHTML = chips
       ? `<div class="map-video-list">${chips}</div>`
@@ -1811,7 +2063,14 @@ function onMapNodeClick(node, groupEl) {
     body.querySelectorAll('.map-video-chip').forEach(chip => {
       chip.addEventListener('click', () => {
         const s = allSummaries.find(x => x.id === chip.dataset.id);
-        if (s) openModal(s);
+        if (!s) return;
+        if (chip.dataset.status === 'pending') {
+          $('archive-search').value = s.title || '';
+          filterArchive();
+          switchTab('archive');
+          return;
+        }
+        openModal(s);
       });
     });
     $('btn-map-filter').onclick = () => {

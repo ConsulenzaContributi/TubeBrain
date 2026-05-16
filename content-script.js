@@ -8,6 +8,77 @@
   if (window.__learningHubInjected) return;
   window.__learningHubInjected = true;
 
+  let lastHoveredVideoUrl = '';
+
+  function normalizeYouTubeVideoUrl(url) {
+    if (!url) return '';
+    try {
+      const parsed = new URL(url, location.origin);
+      if (/youtu\.be$/i.test(parsed.hostname)) {
+        const id = parsed.pathname.split('/').filter(Boolean)[0];
+        return id ? `https://www.youtube.com/watch?v=${id}` : '';
+      }
+      if (!/youtube\.com$/i.test(parsed.hostname) && !/\.youtube\.com$/i.test(parsed.hostname)) return '';
+      if (parsed.pathname === '/watch') {
+        const id = parsed.searchParams.get('v');
+        return id ? `https://www.youtube.com/watch?v=${id}` : '';
+      }
+      const shorts = parsed.pathname.match(/^\/shorts\/([^/?#]+)/);
+      if (shorts) return `https://www.youtube.com/watch?v=${shorts[1]}`;
+      return '';
+    } catch {
+      return '';
+    }
+  }
+
+  function resolveVideoUrlFromNode(node) {
+    const anchor = node?.closest?.('a[href]') || null;
+    return normalizeYouTubeVideoUrl(anchor?.href || '');
+  }
+
+  function captureHoveredVideo(event) {
+    const path = event.composedPath ? event.composedPath() : [event.target];
+    for (const node of path) {
+      const url = resolveVideoUrlFromNode(node);
+      if (url) {
+        lastHoveredVideoUrl = url;
+        return;
+      }
+    }
+  }
+
+  function shouldHandleShortcut(event) {
+    const isMac = navigator.platform.toLowerCase().includes('mac');
+    const modifier = isMac ? event.metaKey : event.ctrlKey;
+    if (!modifier || !event.shiftKey) return false;
+    if (String(event.key || '').toLowerCase() !== 'p') return false;
+    const active = document.activeElement;
+    const typing = active && (
+      /input|textarea|select/i.test(active.tagName) ||
+      active.isContentEditable
+    );
+    return !typing;
+  }
+
+  function resolveShortcutVideoUrl() {
+    return normalizeYouTubeVideoUrl(location.href) || lastHoveredVideoUrl || '';
+  }
+
+  async function triggerQueueShortcutFromPage() {
+    const targetUrl = resolveShortcutVideoUrl();
+    if (!targetUrl) {
+      playQueueSound('info');
+      showQueueToast('already', 'Nessun video rilevato', 'Apri un video o passa il mouse sopra una miniatura YouTube.');
+      return;
+    }
+    try {
+      await chrome.runtime.sendMessage({ action: 'QUEUE_SHORTCUT_TARGET', targetUrl });
+    } catch {
+      playQueueSound('info');
+      showQueueToast('already', 'Scorciatoia non riuscita', 'Ricarica l’estensione e riprova.');
+    }
+  }
+
   // ── Utility: inject script nel contesto pagina ────────────────────────────
 
   function injectAndCapture() {
@@ -167,12 +238,12 @@
       }
 
       if (status === 'success') {
-        // Due note in sequenza: Do5 → Mi5 (accordo positivo, delicato)
-        playTone(523.25, ctx.currentTime,        0.35, 0.18); // Do5
-        playTone(659.25, ctx.currentTime + 0.12, 0.40, 0.15); // Mi5
+        // Due note molto morbide: Sol4 → Si4
+        playTone(392.0,  ctx.currentTime,        0.28, 0.045);
+        playTone(493.88, ctx.currentTime + 0.10, 0.30, 0.038);
       } else {
-        // Nota unica più bassa, breve: già in coda
-        playTone(440, ctx.currentTime, 0.3, 0.10); // La4
+        // Nota singola morbida per stato informativo
+        playTone(349.23, ctx.currentTime, 0.24, 0.03);
       }
 
       // Chiudi il context dopo che i suoni sono finiti
@@ -182,14 +253,14 @@
     }
   }
 
-  function showQueueToast(status, title) {
+  function showQueueToast(status, title, subtitle = '') {
     // Rimuovi eventuali toast precedenti
     const old = document.getElementById('lh-queue-toast');
     if (old) old.remove();
 
     const isSuccess = status === 'success';
     const icon  = isSuccess ? '🕐' : 'ℹ️';
-    const label = isSuccess ? 'Aggiunto alla coda' : 'Già in archivio';
+    const label = isSuccess ? 'Azione completata' : 'Nessuna modifica';
     const color = isSuccess ? '#1a73e8' : '#f59e0b';
     const titleShort = (title || '').length > 52 ? title.slice(0, 52) + '…' : (title || '');
 
@@ -223,6 +294,7 @@
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:700;color:${color};letter-spacing:0.3px;margin-bottom:2px">${label}</div>
         <div style="font-size:12px;color:#495057;line-height:1.4;word-break:break-word">${titleShort}</div>
+        ${subtitle ? `<div style="font-size:11px;color:#6b7280;line-height:1.35;margin-top:3px">${subtitle}</div>` : ''}
       </div>
       <span style="font-size:18px;font-weight:700;color:#868e96;cursor:pointer;flex-shrink:0;pointer-events:all;padding:0 2px"
             onclick="this.closest('#lh-queue-toast').remove()">×</span>
@@ -251,7 +323,7 @@
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'SHOW_QUEUE_TOAST') {
       playQueueSound(message.status);
-      showQueueToast(message.status, message.title);
+      showQueueToast(message.status, message.title, message.subtitle || '');
       sendResponse({ ok: true });
       return false;
     }
@@ -293,11 +365,22 @@
     return true; // risposta asincrona
   });
 
+  document.addEventListener('mousemove', captureHoveredVideo, true);
+  document.addEventListener('contextmenu', captureHoveredVideo, true);
+  document.addEventListener('focusin', captureHoveredVideo, true);
+  document.addEventListener('keydown', event => {
+    if (!shouldHandleShortcut(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    triggerQueueShortcutFromPage();
+  }, true);
+
   // ── Indicatore visivo nella pagina ───────────────────────────────────────
   // Piccolo badge "LH" nell'angolo del video player per indicare che
   // l'estensione è attiva e pronta
 
   function injectBadge() {
+    if (!location.href.includes('/watch')) return;
     if (document.getElementById('lh-badge')) return;
     const badge = document.createElement('div');
     badge.id = 'lh-badge';

@@ -12,7 +12,10 @@
   <header class="header">
     <div class="logo">
       <span class="logo-icon">📚</span>
-      <span class="logo-text">Codex_Chrome-PlugIn_YouTube-Learn</span>
+      <div class="logo-copy">
+        <span class="logo-text">Codex_Chrome-PlugIn_YouTube-Learn</span>
+        <span class="logo-version">v2.2.7</span>
+      </div>
     </div>
     <div class="header-actions">
       <button id="btn-dashboard" class="icon-btn" title="Apri Dashboard">⊞</button>
@@ -79,60 +82,6 @@
     <!-- Alert: nessun sottotitolo -->
     <div id="no-captions-warn" class="alert alert-warn hidden">
       ⚠️ Nessun sottotitolo disponibile. Il riepilogo verrà generato dai metadati.
-    </div>
-
-    <div class="workflow-card">
-      <div class="workflow-head">
-        <div>
-          <p class="workflow-eyebrow">Learning Pipeline</p>
-          <h3 class="workflow-title">Dal video a un file MDX studiabile</h3>
-        </div>
-        <div id="transcript-health" class="health-pill">CC in verifica</div>
-      </div>
-      <div class="workflow-metrics">
-        <div class="workflow-metric">
-          <span class="workflow-metric-label">Capitoli</span>
-          <strong id="metric-chapters">0</strong>
-        </div>
-        <div class="workflow-metric">
-          <span class="workflow-metric-label">Lingua</span>
-          <strong id="metric-language">-</strong>
-        </div>
-        <div class="workflow-metric">
-          <span class="workflow-metric-label">Transcript</span>
-          <strong id="metric-transcript">-</strong>
-        </div>
-      </div>
-      <div class="mode-preview-grid">
-        <div class="mode-preview-card" data-mode-card="verbatim">
-          <span class="mode-preview-kicker">1</span>
-          <strong>Integrale</strong>
-          <p>Trascrizione fedele con capitoli e base documentale completa.</p>
-        </div>
-        <div class="mode-preview-card mode-preview-card-active" data-mode-card="study">
-          <span class="mode-preview-kicker">2</span>
-          <strong>Studio</strong>
-          <p>Capitoli operativi, checklist e workflow per Antigravity.</p>
-        </div>
-        <div class="mode-preview-card" data-mode-card="summary">
-          <span class="mode-preview-kicker">3</span>
-          <strong>Sintesi</strong>
-          <p>Ripasso rapido per capitolo, utile prima di rieseguire il tutorial.</p>
-        </div>
-      </div>
-      <p id="mode-description" class="mode-description">
-        Il file aprirà in priorità la modalità Studio guidato, mantenendo comunque tutte le altre sezioni nello stesso MDX.
-      </p>
-    </div>
-
-    <div class="mode-card">
-      <label for="learning-mode" class="mode-label">Modalità iniziale del file MDX</label>
-      <select id="learning-mode" class="mode-select">
-        <option value="verbatim">1. Trascrizione integrale</option>
-        <option value="study" selected>2. Studio guidato</option>
-        <option value="summary">3. Sintesi rapida</option>
-      </select>
-      <p class="mode-hint">Il file conterrà sempre tutti e 3 i livelli. Questa scelta decide quale modalità evidenziare all'apertura.</p>
     </div>
 
     <div class="actions">
@@ -207,7 +156,7 @@
   <!-- Footer -->
   <footer class="footer">
     <span id="footer-stats" class="footer-stats"></span>
-    <span class="footer-model">Gemini 2.5 Flash</span>
+    <span id="footer-model" class="footer-model"></span>
   </footer>
 
   <script src="popup.js"></script>

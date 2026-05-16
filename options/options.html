@@ -14,7 +14,7 @@
         <span>📚</span>
         <span class="logo-text">Codex_Chrome-PlugIn_YouTube-Learn — Impostazioni</span>
       </div>
-      <span class="version">v2.0 RC1</span>
+      <span class="version">v2.2.7</span>
     </header>
 
     <div class="content">
@@ -23,7 +23,7 @@
         <div>
           <p class="hero-eyebrow">Control Room</p>
           <h1 class="hero-title">Configura il tuo workspace di apprendimento</h1>
-          <p class="hero-desc">Questa pagina governa il comportamento del plugin: modello AI, formato output, modalità di studio e salvataggio locale.</p>
+          <p class="hero-desc">Questa pagina governa il comportamento del plugin: provider AI, formato output, vista iniziale del workspace MDX e salvataggio locale.</p>
         </div>
         <div class="hero-grid">
           <div class="hero-pill">
@@ -45,11 +45,19 @@
       <section class="card">
         <h2 class="card-title">🔑 API Key</h2>
         <p class="card-desc">
-          Codex_Chrome-PlugIn_YouTube-Learn usa <strong>Gemini 2.5 Flash</strong> (gratuito, 250 req/giorno).
-          Ottieni la tua chiave su <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>.
+          Codex_Chrome-PlugIn_YouTube-Learn supporta provider multipli. Al momento puoi usare Gemini oppure OpenAI.
         </p>
 
         <div class="field">
+          <label class="label" for="ai-provider">Provider AI</label>
+          <select id="ai-provider" class="input input-select">
+            <option value="gemini">Gemini</option>
+            <option value="openai">OpenAI</option>
+          </select>
+          <p class="field-hint">Il provider selezionato viene usato per generazione MDX, analisi pagine, tag, chat archivio e ranking semantico.</p>
+        </div>
+
+        <div class="field provider-panel provider-panel-gemini">
           <label class="label" for="gemini-key">Gemini API Key *</label>
           <div class="input-group">
             <input type="password" id="gemini-key" class="input" placeholder="AIza...">
@@ -57,6 +65,18 @@
             <button id="test-key" class="btn btn-ghost btn-sm">Test</button>
           </div>
           <p id="key-feedback" class="field-hint hidden"></p>
+          <p class="field-hint">Ottieni la tua chiave su <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>.</p>
+        </div>
+
+        <div class="field provider-panel provider-panel-openai hidden">
+          <label class="label" for="openai-key">OpenAI API Key *</label>
+          <div class="input-group">
+            <input type="password" id="openai-key" class="input" placeholder="sk-...">
+            <button id="toggle-openai-key" class="btn-icon-sm" title="Mostra/nascondi">👁</button>
+            <button id="test-openai-key" class="btn btn-ghost btn-sm">Test</button>
+          </div>
+          <p id="openai-key-feedback" class="field-hint hidden"></p>
+          <p class="field-hint">Endpoint usati: OpenAI Models API + Responses API. Dopo il test, il plugin carica i modelli realmente disponibili per la tua chiave.</p>
         </div>
 
         <div class="field">
@@ -70,13 +90,28 @@
           <p class="field-hint">Per avatar del canale, iscritti, numero video e paese dei creator. Richiede YouTube Data API v3 attiva nel progetto Google Cloud. <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank">Attiva qui →</a></p>
         </div>
 
-        <div class="field">
-          <label class="label" for="model-select">Modello LLM</label>
-          <select id="model-select" class="input input-select">
+        <div class="field provider-panel provider-panel-gemini">
+          <label class="label" for="gemini-model-select">Modello Gemini</label>
+          <select id="gemini-model-select" class="input input-select">
             <option value="gemini-2.5-flash">Gemini 2.5 Flash (gratuito · consigliato)</option>
             <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite (gratuito · più veloce)</option>
             <option value="gemini-2.5-pro">Gemini 2.5 Pro (gratuito · più preciso)</option>
           </select>
+          <p id="gemini-model-feedback" class="field-hint">Se la chiave è valida, il catalogo viene aggiornato con i modelli esposti dalla tua API Gemini.</p>
+        </div>
+
+        <div class="field provider-panel provider-panel-openai hidden">
+          <label class="label" for="openai-model-select">Modello OpenAI</label>
+          <select id="openai-model-select" class="input input-select">
+            <option value="gpt-5.4-mini">GPT-5.4 mini</option>
+            <option value="gpt-5.4">GPT-5.4</option>
+            <option value="gpt-5.4-nano">GPT-5.4 nano</option>
+            <option value="gpt-5.2">GPT-5.2</option>
+            <option value="gpt-5">GPT-5</option>
+            <option value="gpt-5-mini">GPT-5 mini</option>
+            <option value="gpt-5-nano">GPT-5 nano</option>
+          </select>
+          <p id="openai-model-feedback" class="field-hint">Se la chiave è valida, il catalogo viene aggiornato con i modelli realmente accessibili via OpenAI API.</p>
         </div>
       </section>
 
@@ -107,17 +142,17 @@
       <section class="card">
         <h2 class="card-title">🧠 Output Learning MDX</h2>
         <p class="card-desc">
-          Il nuovo export genera un file <code>.mdx</code> unico con tre livelli: trascrizione integrale, studio guidato e sintesi rapida, più mappa concettuale.
+          Il nuovo export genera sempre un solo file <code>.mdx</code> completo con tutte le viste: trascrizione integrale, studio guidato, sintesi rapida, mappa concettuale e asset didattici.
         </p>
 
         <div class="field">
-          <label class="label" for="default-learning-mode">Modalità iniziale evidenziata</label>
+          <label class="label" for="default-learning-mode">Vista iniziale del workspace MDX</label>
           <select id="default-learning-mode" class="input input-select">
             <option value="verbatim">1. Trascrizione integrale</option>
             <option value="study" selected>2. Studio guidato</option>
             <option value="summary">3. Sintesi rapida</option>
           </select>
-          <p class="field-hint">Il file contiene sempre tutte e 3 le modalità. Questa preferenza controlla quale sezione viene proposta come punto di ingresso.</p>
+          <p class="field-hint">Questa scelta non cambia il contenuto generato. Il file include sempre tutte le viste e decide solo quale pannello aprire per primo.</p>
         </div>
 
         <div class="field">
@@ -161,7 +196,7 @@
       <!-- ── Struttura MD ── -->
       <section class="card">
         <h2 class="card-title">📄 Struttura Markdown</h2>
-        <p class="card-desc">Scegli le sezioni da includere nel riepilogo generato.</p>
+        <p class="card-desc">Questi contenuti fanno parte del pacchetto didattico generato e devono coesistere nello stesso file MDX.</p>
 
         <div class="checkboxes">
           <label class="check-item">
@@ -266,14 +301,14 @@
           <li>Apri un video YouTube</li>
           <li>Clicca l'icona 📚 Codex_Chrome-PlugIn_YouTube-Learn nella barra del browser</li>
           <li>Scegli la modalità iniziale del file e premi <strong>Genera Learning MDX</strong></li>
-          <li>Gemini 2.5 Flash analizza la trascrizione e genera il documento multi-livello</li>
+          <li>Il provider AI selezionato analizza la trascrizione e genera il documento multi-livello</li>
           <li>Salva il file <code>.mdx</code> e trovalo nell'Archivio della Dashboard</li>
           <li>Aggiungi creator dalla Dashboard per monitorare i loro nuovi video</li>
         </ol>
         <div class="readiness-list">
           <div class="readiness-item">
             <span>1</span>
-            <p>API key Gemini valida e modello selezionato</p>
+            <p>Provider AI configurato con API key valida e modello attivo</p>
           </div>
           <div class="readiness-item">
             <span>2</span>

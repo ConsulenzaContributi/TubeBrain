@@ -2,7 +2,9 @@
 
 Chrome Extension MV3 per trasformare video YouTube in documenti `MDX` orientati all'apprendimento.
 
-Stato attuale: `v2.0 RC1`
+Stato attuale: `v2.2.7`
+
+Regola di versioning: ogni modifica al plugin, anche minima, richiede sempre un incremento della versione prima di distribuire, testare o comprimere il progetto.
 
 ## Cosa fa
 

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Learning Hub Status</title>
+  <link rel="stylesheet" href="status.css" />
+</head>
+<body>
+  <main class="status-shell">
+    <div class="status-head">
+      <div class="status-brand">
+        <span class="status-icon" id="status-icon">📚</span>
+        <div>
+          <div class="status-app">Codex Learning Hub</div>
+          <div class="status-version">v2.2.7</div>
+        </div>
+      </div>
+      <button id="btn-close" class="status-close" aria-label="Chiudi">×</button>
+    </div>
+
+    <section class="status-card">
+      <div class="status-kicker" id="status-kicker">Operazione in corso</div>
+      <h1 class="status-title" id="status-title">In attesa…</h1>
+      <p class="status-detail" id="status-detail">Nessuna operazione attiva.</p>
+      <div class="status-progress">
+        <div class="status-progress-fill" id="status-progress-fill"></div>
+      </div>
+      <div class="status-meta">
+        <span id="status-phase">idle</span>
+        <span id="status-updated">adesso</span>
+      </div>
+    </section>
+  </main>
+  <script src="status.js"></script>
+</body>
+</html>

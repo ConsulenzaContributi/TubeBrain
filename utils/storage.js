@@ -3,6 +3,7 @@
 
 const Storage = {
   _initPromise: null,
+  SETTINGS_BACKUP_KEY: 'settingsBackup',
 
   async ensureInitialized() {
     if (!this._initPromise) {
@@ -18,19 +19,70 @@ const Storage = {
     const stats = await this.getStats();
     stats.totalCreators = creators.length;
     await chrome.storage.local.set({ stats });
+    await this.backupAppState();
   },
 
   // ── SETTINGS ──────────────────────────────────────────────────────────────
 
   async getSettings() {
     await this.ensureInitialized();
-    const stored = await chrome.storage.sync.get(AppSchema.DEFAULT_SETTINGS);
-    return AppSchema.normalizeSettings(stored);
+    const [storedSync, storedLocal] = await Promise.all([
+      chrome.storage.sync.get(AppSchema.DEFAULT_SETTINGS),
+      chrome.storage.local.get(this.SETTINGS_BACKUP_KEY),
+    ]);
+
+    const syncSettings = AppSchema.normalizeSettings(storedSync);
+    const localSettings = AppSchema.normalizeSettings(storedLocal[this.SETTINGS_BACKUP_KEY] || {});
+    const syncMeaningful = this.hasMeaningfulSettings(syncSettings);
+    const localMeaningful = this.hasMeaningfulSettings(localSettings);
+
+    let resolved = syncSettings;
+    if (!syncMeaningful && localMeaningful) {
+      resolved = localSettings;
+      await chrome.storage.sync.set(resolved);
+    } else if (syncMeaningful && localMeaningful && localSettings.settingsUpdatedAt > syncSettings.settingsUpdatedAt) {
+      resolved = localSettings;
+      await chrome.storage.sync.set(resolved);
+    }
+
+    await chrome.storage.local.set({ [this.SETTINGS_BACKUP_KEY]: resolved });
+    return resolved;
   },
 
   async saveSettings(settings) {
     await this.ensureInitialized();
-    await chrome.storage.sync.set(AppSchema.normalizeSettings(settings));
+    const normalized = AppSchema.normalizeSettings({
+      ...settings,
+      settingsUpdatedAt: Date.now(),
+    });
+    await Promise.all([
+      chrome.storage.sync.set(normalized),
+      chrome.storage.local.set({ [this.SETTINGS_BACKUP_KEY]: normalized }),
+    ]);
+  },
+
+  async backupAppState() {
+    if (!globalThis.StateBackup?.backupNow) return;
+    await StateBackup.backupNow();
+  },
+
+  hasMeaningfulSettings(settings = {}) {
+    return Boolean(
+      settings.geminiApiKey ||
+      settings.geminiApiKeyTested ||
+      settings.openaiApiKey ||
+      settings.openaiApiKeyTested ||
+      settings.youtubeApiKey ||
+      settings.downloadFolder ||
+      settings.useFileSystemApi ||
+      settings.provider !== AppSchema.DEFAULT_SETTINGS.provider ||
+      settings.model !== AppSchema.DEFAULT_SETTINGS.model ||
+      settings.openaiModel !== AppSchema.DEFAULT_SETTINGS.openaiModel ||
+      settings.language !== AppSchema.DEFAULT_SETTINGS.language ||
+      settings.defaultLearningMode !== AppSchema.DEFAULT_SETTINGS.defaultLearningMode ||
+      settings.outputFormat !== AppSchema.DEFAULT_SETTINGS.outputFormat ||
+      settings.autoQueueInterval !== AppSchema.DEFAULT_SETTINGS.autoQueueInterval
+    );
   },
 
   // ── CREATORS ──────────────────────────────────────────────────────────────
@@ -91,6 +143,7 @@ const Storage = {
     if (idx !== -1) {
       creators[idx] = AppSchema.normalizeCreator({ ...creators[idx], ...updates });
       await chrome.storage.local.set({ creators });
+      await this.backupAppState();
     }
   },
 
@@ -109,12 +162,14 @@ const Storage = {
     const entry = AppSchema.normalizeSummary({ ...summary, id, createdAt: Date.now(), updatedAt: Date.now() });
     summaries.unshift(entry); // più recente prima
     await chrome.storage.local.set({ summaries });
+    await this.backupAppState();
     return entry;
   },
 
   async deleteSummary(id) {
     const summaries = await this.getSummaries();
     await chrome.storage.local.set({ summaries: summaries.filter(s => s.id !== id) });
+    await this.backupAppState();
   },
 
   async updateSummaryById(id, updates) {
@@ -123,6 +178,7 @@ const Storage = {
     if (idx === -1) return null;
     summaries[idx] = AppSchema.normalizeSummary({ ...summaries[idx], ...updates, id, updatedAt: Date.now() });
     await chrome.storage.local.set({ summaries });
+    await this.backupAppState();
     return summaries[idx];
   },
 
@@ -150,6 +206,7 @@ const Storage = {
     const feedCache = await this.getFeedCache();
     feedCache[channelId] = videos;
     await chrome.storage.local.set({ feedCache });
+    await this.backupAppState();
   },
 
   // ── CHANNEL SCANS ────────────────────────────────────────────────────────
@@ -169,6 +226,7 @@ const Storage = {
     const channelScans = await this.getChannelScans();
     channelScans[channelId] = scan;
     await chrome.storage.local.set({ channelScans });
+    await this.backupAppState();
   },
 
   // ── AUTO-QUEUE ────────────────────────────────────────────────────────────
@@ -201,6 +259,7 @@ const Storage = {
     const merged = [...existing, ...videoIds];
     const trimmed = merged.slice(-500); // mantieni solo gli ultimi 500
     await chrome.storage.local.set({ notifiedVideos: trimmed });
+    await this.backupAppState();
   },
 
   // ── STATS ─────────────────────────────────────────────────────────────────
@@ -218,6 +277,7 @@ const Storage = {
     const monthKey = new Date().toISOString().slice(0, 7); // "2026-05"
     stats.byMonth[monthKey] = (stats.byMonth[monthKey] || 0) + 1;
     await chrome.storage.local.set({ stats });
+    await this.backupAppState();
   },
 };
 

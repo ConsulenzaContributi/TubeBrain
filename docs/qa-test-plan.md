@@ -2,7 +2,7 @@
 
 ## Obiettivo
 
-Validare `Codex_Chrome-PlugIn_YouTube-Learn v2.0 RC1` su flussi reali prima del test esterno.
+Validare `Codex_Chrome-PlugIn_YouTube-Learn v2.2.7` su flussi reali prima del test esterno.
 
 ## Ambiente minimo
 
@@ -73,7 +73,7 @@ Validare `Codex_Chrome-PlugIn_YouTube-Learn v2.0 RC1` su flussi reali prima del 
 
 - URL YouTube non validi
 - playlist privata o non raggiungibile
-- API key Gemini assente
+- provider AI selezionato senza API key valida
 - API key YouTube assente durante import playlist
 - storage con dati legacy
 - navigazione YouTube SPA tra due video consecutivi

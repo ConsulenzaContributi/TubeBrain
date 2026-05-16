@@ -1,20 +1,26 @@
 // schemas/app-schema.js — Schema condiviso applicazione e normalizzazione entita
 
 const AppSchema = {
-  VERSION: 2,
+  VERSION: 5,
 
   DEFAULT_SETTINGS: {
+    provider: 'gemini',
     geminiApiKey: '',
+    geminiApiKeyTested: false,
+    openaiApiKey: '',
+    openaiApiKeyTested: false,
     youtubeApiKey: '',
     language: 'it',
     downloadFolder: '',
     useFileSystemApi: false,
     model: 'gemini-2.5-flash',
+    openaiModel: 'gpt-5.4-mini',
     fallbackModel: 'groq',
     autoQueueInterval: '12',
     defaultLearningMode: 'study',
     outputFormat: 'mdx',
-    settingsSchemaVersion: 2,
+      settingsSchemaVersion: 5,
+    settingsUpdatedAt: 0,
   },
 
   DEFAULT_STATS: {
@@ -47,15 +53,20 @@ const AppSchema = {
     return {
       ...this.DEFAULT_SETTINGS,
       ...settings,
+      provider: ['gemini', 'openai'].includes(settings.provider) ? settings.provider : this.DEFAULT_SETTINGS.provider,
+      geminiApiKeyTested: this.normalizeBoolean(settings.geminiApiKeyTested, false),
+      openaiApiKeyTested: this.normalizeBoolean(settings.openaiApiKeyTested, false),
       language: ['it', 'auto', 'en'].includes(settings.language) ? settings.language : this.DEFAULT_SETTINGS.language,
       defaultLearningMode: ['verbatim', 'study', 'summary'].includes(settings.defaultLearningMode)
         ? settings.defaultLearningMode
         : this.DEFAULT_SETTINGS.defaultLearningMode,
       outputFormat: settings.outputFormat === 'md' ? 'md' : 'mdx',
+      openaiModel: this.normalizeString(settings.openaiModel, this.DEFAULT_SETTINGS.openaiModel),
       useFileSystemApi: this.normalizeBoolean(settings.useFileSystemApi, false),
       autoQueueInterval: ['off', '6', '12', '24'].includes(String(settings.autoQueueInterval))
         ? String(settings.autoQueueInterval)
         : this.DEFAULT_SETTINGS.autoQueueInterval,
+      settingsUpdatedAt: this.normalizeNumber(settings.settingsUpdatedAt, 0),
       settingsSchemaVersion: this.VERSION,
     };
   },
@@ -128,6 +139,8 @@ const AppSchema = {
       markdown: typeof summary.markdown === 'string' ? summary.markdown : null,
       fullMarkdown: typeof summary.fullMarkdown === 'string' ? summary.fullMarkdown : null,
       tags: this.uniqueStrings(summary.tags),
+      mapTags: this.uniqueStrings(summary.mapTags || summary.tags),
+      tagGraph: (summary.tagGraph && typeof summary.tagGraph === 'object') ? summary.tagGraph : null,
       status,
       thumbnail: summary.thumbnail || (videoId ? `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg` : ''),
       captionTracks: this.normalizeArray(summary.captionTracks),

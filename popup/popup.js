@@ -1,4 +1,4 @@
-// popup.js — Learning Hub v1.4.0
+// popup.js — Learning Hub v2.2.7
 // Estrae dati video via chrome.scripting (world:MAIN), fetch captions direttamente.
 
 const $ = id => document.getElementById(id);
@@ -24,7 +24,10 @@ async function loadPopupPreferences() {
   try {
     const settings = await bg('GET_SETTINGS').then(r => r.settings);
     currentLearningMode = settings.defaultLearningMode || 'study';
-    if ($('learning-mode')) $('learning-mode').value = currentLearningMode;
+    const providerLabel = settings.provider === 'openai'
+      ? `OpenAI · ${settings.openaiModel || 'gpt-5.4-mini'}`
+      : `Gemini · ${settings.model || 'gemini-2.5-flash'}`;
+    if ($('footer-model')) $('footer-model').textContent = providerLabel;
   } catch {}
 }
 
@@ -205,7 +208,7 @@ function formatCaptionWithChapters(segs, chapters = []) {
     const start = chapter.startMs || 0;
     const end = chapters[index + 1]?.startMs ?? Infinity;
     const chapterSegs = segs.filter(seg => seg.ms >= start && seg.ms < end);
-    return `## ${chapter.title} [${msTs(start)}]\n${chapterSegs.map(seg => seg.text).join(' ')}`;
+    return `## ${chapter.title} [${msTs(start)}]\n${chapterSegs.map(seg => `[${msTs(seg.ms)}] ${seg.text}`).join('\n')}`;
   }).join('\n\n');
 }
 
@@ -241,9 +244,7 @@ async function fetchCaption(baseUrl, chapters = []) {
 
 function msTs(ms) {
   const s = Math.floor(ms / 1000), m = Math.floor(s / 60), h = Math.floor(m / 60);
-  return h > 0
-    ? `${h}:${String(m%60).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`
-    : `${m}:${String(s%60).padStart(2,'0')}`;
+  return `${String(h).padStart(2,'0')}:${String(m%60).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
 }
 
 // ── Visualizzazione stato video ───────────────────────────────────────────────
@@ -260,7 +261,6 @@ async function showVideoState(vd, settings) {
       badges.innerHTML += `<span class="badge info">CC: ${vd.captionTracks.map(t=>t.languageCode).join(', ')}</span>`;
   }
   if (vd.warning === 'no_captions') show('no-captions-warn');
-  updateWorkflowPreview(vd);
 
   // Statistiche video
   updateStatsDisplay(vd);
@@ -270,7 +270,7 @@ async function showVideoState(vd, settings) {
     if (summarized) show('already-summarized');
   } catch {}
 
-  if (!settings.geminiApiKey) {
+  if (!hasProviderKey(settings)) {
     $('btn-generate').disabled = true;
     showBanner('⚙️ API key non configurata. <a id="link-settings" href="#">Vai alle Impostazioni →</a>');
     document.addEventListener('click', e => {
@@ -278,40 +278,6 @@ async function showVideoState(vd, settings) {
     }, { once: true });
   }
   showState('video');
-}
-
-function updateWorkflowPreview(vd) {
-  const chapters = Array.isArray(vd.chapters) ? vd.chapters.length : 0;
-  const transcriptLines = (vd.transcript || '').split('\n').filter(Boolean).length;
-  const transcriptState = vd.warning === 'no_captions'
-    ? 'Metadati only'
-    : transcriptLines > 0
-      ? `${transcriptLines} blocchi`
-      : 'In attesa';
-
-  if ($('metric-chapters')) $('metric-chapters').textContent = chapters || 'Auto';
-  if ($('metric-language')) $('metric-language').textContent = (vd.captionLang || 'auto').toUpperCase();
-  if ($('metric-transcript')) $('metric-transcript').textContent = transcriptState;
-
-  const health = $('transcript-health');
-  if (health) {
-    health.textContent = vd.warning === 'no_captions' ? 'CC assenti' : vd.captionLang ? `CC ${vd.captionLang}` : 'CC rilevate';
-    health.classList.toggle('warn', vd.warning === 'no_captions');
-  }
-
-  updateModePreview($('learning-mode')?.value || currentLearningMode || 'study');
-}
-
-function updateModePreview(mode) {
-  const descriptions = {
-    verbatim: 'Il file aprirà sulla trascrizione integrale, utile quando vuoi massima fedeltà e ricostruzione completa del tutorial.',
-    study: 'Il file aprirà in priorità la modalità Studio guidato, mantenendo comunque tutte le altre sezioni nello stesso MDX.',
-    summary: 'Il file aprirà sulla sintesi rapida per capitoli, ideale per un ripasso veloce prima di eseguire il workflow.',
-  };
-  document.querySelectorAll('[data-mode-card]').forEach(card => {
-    card.classList.toggle('mode-preview-card-active', card.dataset.modeCard === mode);
-  });
-  if ($('mode-description')) $('mode-description').textContent = descriptions[mode] || descriptions.study;
 }
 
 function updateStatsDisplay(vd) {
@@ -370,13 +336,17 @@ function showBanner(html) {
 
 async function generate() {
   if (!currentVideoData) return;
-  currentLearningMode = $('learning-mode')?.value || currentLearningMode || 'study';
   showState('generating');
   setProgress(10, 'Dati video pronti...');
   try {
+    const settings = await bg('GET_SETTINGS').then(r => r.settings);
+    currentLearningMode = settings.defaultLearningMode || currentLearningMode || 'study';
+    const providerLabel = settings.provider === 'openai'
+      ? `OpenAI ${settings.openaiModel || 'gpt-5.4-mini'}`
+      : `Gemini ${settings.model || 'gemini-2.5-flash'}`;
     setProgress(currentVideoData.transcript ? 30 : 20,
       currentVideoData.transcript ? 'Trascrizione pronta. Avvio analisi AI...' : 'Analisi da metadati...');
-    setProgress(40, 'Creazione Learning MDX con Gemini 2.5 Flash...');
+    setProgress(40, `Creazione Learning MDX con ${providerLabel}...`);
     const result = await bg('GENERATE_SUMMARY', {
       videoData: currentVideoData,
       generationOptions: { learningMode: currentLearningMode },
@@ -487,10 +457,6 @@ function bindButtons() {
   $('btn-open-yt')?.addEventListener('click', () => chrome.tabs.create({ url: 'https://youtube.com' }));
   $('link-existing')?.addEventListener('click', e => { e.preventDefault(); bg('OPEN_DASHBOARD'); });
   $('btn-analyze-page')?.addEventListener('click', analyzeWebPage);
-  $('learning-mode')?.addEventListener('change', (event) => {
-    currentLearningMode = event.target.value;
-    updateModePreview(currentLearningMode);
-  });
 }
 
 // ── Analisi articolo web ──────────────────────────────────────────────────────
@@ -537,7 +503,7 @@ async function analyzeWebPage() {
   }
 
   const settings = await bg('GET_SETTINGS').then(r => r.settings);
-  if (!settings.geminiApiKey) {
+  if (!hasProviderKey(settings)) {
     showBanner('⚙️ API key non configurata. <a id="link-settings" href="#">Vai alle Impostazioni →</a>');
     document.addEventListener('click', e => {
       if (e.target.id === 'link-settings') { e.preventDefault(); openSettings(); }
@@ -565,7 +531,7 @@ async function analyzeWebPage() {
       throw new Error('Contenuto testo troppo scarso. Prova su una pagina con più testo.');
     }
 
-    setArticleProgress(40, 'Analisi AI con Gemini…');
+    setArticleProgress(40, `Analisi AI con ${settings.provider === 'openai' ? 'OpenAI' : 'Gemini'}…`);
     const result = await bg('ANALYZE_WEBPAGE', { articleData });
     if (!result.success) throw new Error(result.error || 'Errore analisi');
 
@@ -668,7 +634,7 @@ function extractInstagramFromPage() {
 
 async function analyzeInstagramPage() {
   const settings = await bg('GET_SETTINGS').then(r => r.settings);
-  if (!settings.geminiApiKey) {
+  if (!hasProviderKey(settings)) {
     showBanner('⚙️ API key non configurata. <a id="link-settings" href="#">Vai alle Impostazioni →</a>');
     document.addEventListener('click', e => {
       if (e.target.id === 'link-settings') { e.preventDefault(); openSettings(); }
@@ -702,7 +668,7 @@ async function analyzeInstagramPage() {
       igData.text = `Tipo: ${igData.pageType}\nCreator: @${igData.username}\nURL: ${igData.url}\n(Testo estratto molto scarso — Instagram può limitare il contenuto visibile agli utenti non loggati o su determinati contenuti)`;
     }
 
-    setArticleProgress(40, 'Analisi AI con Gemini…');
+    setArticleProgress(40, `Analisi AI con ${settings.provider === 'openai' ? 'OpenAI' : 'Gemini'}…`);
     const result = await bg('ANALYZE_WEBPAGE', { articleData: igData });
     if (!result.success) throw new Error(result.error || 'Errore analisi');
 
@@ -752,6 +718,11 @@ function sanitizeFilename(title, channel) {
   const d = new Date().toISOString().slice(0,10);
   const s = x => x.replace(/[<>:"/\\|?*]/g,'').replace(/\s+/g,'_').slice(0,50);
   return `${d}_${s(channel)}_${s(title)}.mdx`;
+}
+function hasProviderKey(settings = {}) {
+  return settings.provider === 'openai'
+    ? Boolean(settings.openaiApiKey)
+    : Boolean(settings.geminiApiKey);
 }
 function markdownToPreview(md) {
   if (!md) return '';
