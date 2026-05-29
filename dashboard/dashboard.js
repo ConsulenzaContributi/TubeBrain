@@ -2218,10 +2218,11 @@ function renderMap() {
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
 async function loadStats() {
-  const [{ stats }, { summaries }, { creators }] = await Promise.all([
+  const [{ stats }, { summaries }, { creators }, globalStatsRes] = await Promise.all([
     bg('GET_STATS'),
     bg('GET_SUMMARIES'),
     bg('GET_CREATORS'),
+    bg('GET_GLOBAL_STATS').catch(() => ({})),
   ]);
 
   $('stat-total').textContent = stats?.totalSummarized || 0;
@@ -2229,6 +2230,11 @@ async function loadStats() {
 
   const monthKey = new Date().toISOString().slice(0, 7);
   $('stat-this-month').textContent = stats?.byMonth?.[monthKey] || 0;
+
+  // Streak e card in scadenza (da GET_GLOBAL_STATS arricchito con Analytics)
+  const gs = globalStatsRes?.stats || {};
+  if ($('stat-streak')) $('stat-streak').textContent = escHtml(String(gs.streak ?? 0));
+  if ($('stat-due-today')) $('stat-due-today').textContent = escHtml(String(gs.dueToday ?? 0));
 
   // Tag unici
   const allTags = (summaries || []).flatMap(s => s.tags || []);

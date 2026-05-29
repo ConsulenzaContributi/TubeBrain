@@ -20,6 +20,7 @@ importScripts(
   'utils/cloud.js',
   // ── Nuovi utils v2.4.0 ────────────────────────────────────────────────────────
   'utils/fsrs.js',
+  'utils/analytics.js',
   'utils/spaced-repetition.js',
   'utils/adaptive-quiz.js',
   'utils/progress-tracker.js',
@@ -254,7 +255,16 @@ async function handleMessage(message, sender) {
 
     // ── Feature #6 — Progress Tracking ───────────────────────────────────────
     case 'GET_PROGRESS':        return { success: true, progress: await ProgressTracker.getProgress(message.summaryId) };
-    case 'GET_GLOBAL_STATS':    return { success: true, stats: await ProgressTracker.getGlobalStats() };
+    case 'GET_GLOBAL_STATS': {
+      const stats = await ProgressTracker.getGlobalStats();
+      try {
+        const dueCards = await SR.getAllDueCards();
+        const sessionsDays = []; // dati per-giorno non ancora tracciati; streak=0 come prima versione
+        stats.streak = Analytics.computeStreak(sessionsDays, Date.now());
+        stats.dueToday = (Analytics.dueForecast(dueCards, Date.now(), 0)[0]) || dueCards.length;
+      } catch (_) {}
+      return { success: true, stats };
+    }
     case 'MARK_SECTION_READ':   await ProgressTracker.markSectionRead(message.summaryId, message.sectionName); return { success: true };
 
     // ── Feature #7 — Export Anki / Obsidian / Mind Map ───────────────────────
