@@ -20,6 +20,31 @@ const AppSchema = {
     { key: 'personalNotes', label: '🗒️ Appunti personali', mode: 'notes' },
   ],
 
+  MDX_TOOL_GROUPS: [
+    { key: 'transcript',  label: '📝 Trascrizione',   sections: ['verbatimTranscript'] },
+    { key: 'study',       label: '🎓 Studio guidato', sections: ['studyGuide', 'quickSummary', 'conceptMap', 'operationalGlossary'] },
+    { key: 'memorize',    label: '🧠 Memorizzazione', sections: ['flashcards', 'finalQuiz', 'errorsRecovery'] },
+    { key: 'practice',    label: '🛠️ Pratica',        sections: ['interactiveTimeline', 'executionChecklist', 'tutorialReplication'] },
+    { key: 'antigravity', label: '🤖 Antigravity',    sections: ['antigravityInstructions', 'antigravityPrompt'] },
+  ],
+
+  mdxGroupState(mdxSections = {}, groupKey) {
+    const group = this.MDX_TOOL_GROUPS.find(g => g.key === groupKey);
+    if (!group) return 'off';
+    const on = group.sections.filter(k => Boolean(mdxSections[k])).length;
+    if (on === 0) return 'off';
+    if (on === group.sections.length) return 'on';
+    return 'mixed';
+  },
+
+  applyMdxGroupToggle(mdxSections = {}, groupKey, value) {
+    const group = this.MDX_TOOL_GROUPS.find(g => g.key === groupKey);
+    const next = { ...mdxSections };
+    if (!group) return next;
+    group.sections.forEach(k => { next[k] = Boolean(value); });
+    return next;
+  },
+
   DEFAULT_MDX_SECTIONS: {
     verbatimTranscript: true,
     studyGuide: true,

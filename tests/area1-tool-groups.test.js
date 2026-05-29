@@ -1,0 +1,27 @@
+const assert = require('assert');
+const AppSchema = require('../schemas/app-schema.js');
+const catalogKeys = new Set(AppSchema.MDX_SECTION_CATALOG.map(s => s.key));
+assert.ok(Array.isArray(AppSchema.MDX_TOOL_GROUPS), 'MDX_TOOL_GROUPS deve essere un array');
+assert.equal(AppSchema.MDX_TOOL_GROUPS.length, 5, 'devono esserci 5 gruppi');
+AppSchema.MDX_TOOL_GROUPS.forEach(g => {
+  assert.ok(g.key && g.label && Array.isArray(g.sections) && g.sections.length, `gruppo ${g.key} malformato`);
+  g.sections.forEach(k => assert.ok(catalogKeys.has(k), `sezione ${k} non nel catalogo`));
+});
+const grouped = new Set(AppSchema.MDX_TOOL_GROUPS.flatMap(g => g.sections));
+assert.ok(!grouped.has('personalNotes'), 'personalNotes non deve stare in un gruppo');
+const allOn = AppSchema.normalizeMdxSections({});
+assert.equal(AppSchema.mdxGroupState(allOn, 'study'), 'on');
+const allOff = {};
+AppSchema.MDX_SECTION_CATALOG.forEach(s => { allOff[s.key] = false; });
+assert.equal(AppSchema.mdxGroupState(allOff, 'study'), 'off');
+const mixed = { ...allOff, studyGuide: true };
+assert.equal(AppSchema.mdxGroupState(mixed, 'study'), 'mixed');
+const before = AppSchema.normalizeMdxSections({});
+const after = AppSchema.applyMdxGroupToggle(before, 'memorize', false);
+assert.equal(before.flashcards, true, 'input non deve mutare');
+assert.equal(after.flashcards, false);
+assert.equal(after.finalQuiz, false);
+assert.equal(after.errorsRecovery, false);
+assert.equal(after.studyGuide, true, 'sezioni di altri gruppi invariate');
+assert.equal(after.personalNotes, before.personalNotes, 'personalNotes invariato');
+console.log('area1-tool-groups OK');
