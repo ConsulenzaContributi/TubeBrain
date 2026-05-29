@@ -448,6 +448,20 @@ async function showVideoState(vd, settings) {
       if (e.target.id === 'link-settings') { e.preventDefault(); openSettings(); }
     }, { once: true });
   }
+
+  try {
+    const estEl = $('cost-estimate');
+    if (estEl && typeof CostUtils !== 'undefined') {
+      const durMin = Number(vd.duration ? vd.duration / 60 : 0);
+      const approxChars = vd.transcript ? vd.transcript.length : Math.round(durMin * 150 * 6); // ~150 parole/min, ~6 char/parola
+      const tokens = CostUtils.estimateTokens('x'.repeat(Math.max(0, approxChars)));
+      const model = settings.provider === 'openai' ? (settings.openaiModel || 'gpt-5.4-mini') : (settings.model || 'gemini-2.5-flash');
+      const usd = CostUtils.estimateCostUsd(tokens, model);
+      const reco = CostUtils.recommendModel(tokens);
+      estEl.textContent = `Stima: ~${tokens.toLocaleString('it-IT')} token · ~$${usd.toFixed(4)} · consigliato: ${reco}`;
+    }
+  } catch (e) {}
+
   showState('video');
 }
 
