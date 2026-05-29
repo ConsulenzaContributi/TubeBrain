@@ -27,8 +27,12 @@ importScripts(
   'utils/progress-tracker.js',
   'utils/annotations.js',
   'utils/study-set.js',
-  'utils/pomodoro.js'
+  'utils/pomodoro.js',
+  // ── Fase 6: integrazioni esterne ────────────────────────────────────────────
+  'utils/ankiconnect.js',
+  'utils/notion.js'
   // Nota: tts.js usa window.speechSynthesis (solo popup/dashboard, non service worker)
+  // Nota: pdf-extract.js usa import() dinamico + window — solo dashboard, NON qui
 );
 
 const appReady = initializeApp();
@@ -354,6 +358,60 @@ async function handleMessage(message, sender) {
       const s15 = summaries15.find(s => s.id === message.summaryId);
       if (!s15) throw new Error('Summary non trovato');
       return { success: true, studySet: StudySet.export(s15) };
+    }
+
+    // ── Fase 6: AnkiConnect ────────────────────────────────────────────────────
+    case 'ANKICONNECT_PUSH': {
+      const summaries = await Storage.getSummaries();
+      const s = summaries.find(x => x.id === message.id);
+      if (!s) throw new Error('Riepilogo non trovato');
+      const cards = SR.parseFlashcardsFromMarkdown(s.fullMarkdown || s.markdown || '');
+      if (!cards.length) return { success: false, error: 'Nessuna flashcard in questo documento.' };
+      const deck = 'TubeBrain::' + (s.title || 'Video').slice(0, 60).replace(/[:]/g, '-');
+      const payload = AnkiConnect.buildAddNotesPayload(cards, deck, 'Basic');
+      try {
+        const res = await NetUtils.fetchWithRetry('http://127.0.0.1:8765', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+        }, { retries: 1, timeoutMs: 8000 });
+        const data = await res.json();
+        if (data.error) return { success: false, error: 'Anki: ' + data.error };
+        return { success: true, added: (data.result || []).filter(Boolean).length };
+      } catch (e) {
+        return { success: false, error: 'Anki non raggiungibile. Apri Anki con l\'add-on AnkiConnect attivo.' };
+      }
+    }
+
+    // ── Fase 6: Notion ────────────────────────────────────────────────────────
+    case 'NOTION_EXPORT': {
+      const settings = await Storage.getSettings();
+      if (!settings.notionToken || !settings.notionDbId) return { success: false, error: 'Configura token e database Notion nelle Impostazioni.' };
+      const summaries = await Storage.getSummaries();
+      const s = summaries.find(x => x.id === message.id);
+      if (!s) throw new Error('Riepilogo non trovato');
+      const payload = NotionExport.buildPagePayload(s, settings.notionDbId);
+      const res = await NetUtils.fetchWithRetry('https://api.notion.com/v1/pages', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + settings.notionToken, 'Notion-Version': '2022-06-28', 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }, { retries: 2, timeoutMs: 20000 });
+      const data = await res.json();
+      if (!res.ok) return { success: false, error: 'Notion: ' + (data && data.message || res.status) };
+      return { success: true, url: data.url };
+    }
+
+    // ── Fase 6: Obsidian sync-all ──────────────────────────────────────────────
+    case 'OBSIDIAN_SYNC_ALL': {
+      const summaries = (await Storage.getSummaries()).filter(s => s.status === 'extracted');
+      let ok = 0, failed = 0;
+      for (const s of summaries) {
+        try {
+          const md = ExportFormatters.buildObsidianMd(s);
+          const safe = sanitizePath(s.title || s.id).slice(0, 60);
+          await FileSystemUtils.trySaveToVault(`LearningHub/Obsidian/${safe}.md`, md);
+          ok++;
+        } catch (e) { failed++; }
+      }
+      return { success: true, synced: ok, failed };
     }
 
     default: throw new Error(`Azione non riconosciuta: ${message.action}`);

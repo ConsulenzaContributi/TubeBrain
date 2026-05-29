@@ -20,7 +20,9 @@
     "*://generativelanguage.googleapis.com/*",
     "*://www.youtube.com/feeds/*",
     "*://www.googleapis.com/*",
-    "*://*.vimeo.com/*"
+    "*://*.vimeo.com/*",
+    "http://127.0.0.1:8765/*",
+    "https://api.notion.com/*"
   ],
   "background": {
     "service_worker": "background.js"

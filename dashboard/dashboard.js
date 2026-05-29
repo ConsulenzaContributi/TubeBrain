@@ -200,6 +200,7 @@ function bindButtons() {
   $('btn-batch-import')?.addEventListener('click', importBatchUrlsFromDashboard);
   $('btn-generate-path')?.addEventListener('click', generateLearningPathUI);
   $('btn-export-global-archive')?.addEventListener('click', () => bg('EXPORT_GLOBAL_ARCHIVE'));
+  $('btn-obsidian-sync-all')?.addEventListener('click', async e => obsidianSyncAll(e.currentTarget));
   // ── Event delegation: Archivio globale ───────────────────────────────────
   $('archive-list').addEventListener('click', async e => {
     // Ignora click su link <a>
@@ -209,9 +210,12 @@ function bindButtons() {
     if (btn) {
       e.stopPropagation();
       const { action, id } = btn.dataset;
-      if (action === 'extract')    await extractPending(id, btn);
-      if (action === 'open-file')  await openSummaryFile(id, btn);
-      if (action === 'delete')     await deleteSummaryItem(id);
+      if (action === 'extract')         await extractPending(id, btn);
+      if (action === 'open-file')       await openSummaryFile(id, btn);
+      if (action === 'delete')          await deleteSummaryItem(id);
+      if (action === 'anki-push')       await ankiPush(id, btn);
+      if (action === 'notion-export')   await notionExport(id, btn);
+      if (action === 'obsidian-sync')   await obsidianSyncAll(btn);
       return;
     }
     // Click sulla card (non su un bottone) → apri modal
@@ -1026,6 +1030,69 @@ async function deleteSummaryItem(id) {
   await loadSummaries();
 }
 
+// ── Fase 6: AnkiConnect ──────────────────────────────────────────────────────
+async function ankiPush(id, btn) {
+  if (!btn) return;
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳';
+  try {
+    const res = await bg('ANKICONNECT_PUSH', { id });
+    if (res && res.success) {
+      btn.textContent = `✅ +${res.added}`;
+    } else {
+      btn.textContent = '❌';
+      alert('AnkiConnect: ' + (res && res.error || 'Errore sconosciuto'));
+    }
+  } catch (e) {
+    btn.textContent = '❌';
+    alert('Errore AnkiConnect: ' + e.message);
+  } finally {
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 3000);
+  }
+}
+
+// ── Fase 6: Notion ───────────────────────────────────────────────────────────
+async function notionExport(id, btn) {
+  if (!btn) return;
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳';
+  try {
+    const res = await bg('NOTION_EXPORT', { id });
+    if (res && res.success) {
+      btn.textContent = '✅ Notion';
+      if (res.url) setTimeout(() => window.open(res.url, '_blank'), 500);
+    } else {
+      btn.textContent = '❌';
+      alert('Notion: ' + (res && res.error || 'Errore sconosciuto'));
+    }
+  } catch (e) {
+    btn.textContent = '❌';
+    alert('Errore Notion: ' + e.message);
+  } finally {
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 3000);
+  }
+}
+
+// ── Fase 6: Obsidian Sync All ─────────────────────────────────────────────────
+async function obsidianSyncAll(btn) {
+  if (!btn) return;
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳ Sync...';
+  try {
+    const res = await bg('OBSIDIAN_SYNC_ALL');
+    if (res && res.success) {
+      btn.textContent = `✅ ${res.synced} sync${res.failed ? ', ❌ ' + res.failed + ' err' : ''}`;
+    } else {
+      btn.textContent = '❌';
+    }
+  } catch (e) {
+    btn.textContent = '❌';
+    alert('Errore Obsidian sync: ' + e.message);
+  } finally {
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 4000);
+  }
+}
+
 // Elimina e aggiorna anche il pannello per-creator
 async function deleteSummaryAndRefresh(id, channelId, channelName) {
   if (!confirm('Eliminare questo riepilogo?')) return;
@@ -1210,6 +1277,8 @@ function renderArchive(summaries, highlightQuery = '') {
             ? `<button class="btn btn-primary btn-sm" data-action="extract"   data-id="${s.id}" title="Estrai MD">✨ Estrai</button>`
             : `<button class="btn btn-ghost btn-sm"   data-action="open-file" data-id="${s.id}" title="Apri MD">📂 MD</button>`
           }
+          ${!isPending ? `<button class="btn btn-ghost btn-sm" data-action="anki-push" data-id="${s.id}" title="Invia ad Anki">🃏 Anki</button>` : ''}
+          ${!isPending ? `<button class="btn btn-ghost btn-sm" data-action="notion-export" data-id="${s.id}" title="Esporta su Notion">📝 Notion</button>` : ''}
           <button class="btn btn-danger btn-sm" data-action="delete" data-id="${s.id}" title="Elimina">🗑️</button>
         </div>
       </div>
