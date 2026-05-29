@@ -6,6 +6,7 @@ importScripts(
   'core/state-backup.js',
   'core/storage-migrations.js',
   'core/learning-document.js',
+  'core/queue-reconcile.js',
   'core/app-logger.js',
   'renderers/export-formatters.js',
   'utils/transcript.js',
