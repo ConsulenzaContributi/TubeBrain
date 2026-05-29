@@ -1,4 +1,4 @@
-// popup.js — Learning Hub v2.2.7
+// popup.js — TubeBrain vA1.0.1
 // Estrae dati video via chrome.scripting (world:MAIN), fetch captions direttamente.
 
 const $ = id => document.getElementById(id);
@@ -10,25 +10,195 @@ let currentMarkdown  = null;
 let currentTags      = [];
 let currentPageType  = 'web'; // 'web' | 'instagram-post' | 'instagram-reel' | 'instagram-profile'
 let currentLearningMode = 'study';
+let currentMdxSections = (typeof AppSchema !== 'undefined' && AppSchema.DEFAULT_MDX_SECTIONS)
+  ? { ...AppSchema.DEFAULT_MDX_SECTIONS }
+  : {};
+
+const POPUP_MDX_SECTION_CATALOG = (typeof AppSchema !== 'undefined' && Array.isArray(AppSchema.MDX_SECTION_CATALOG))
+  ? AppSchema.MDX_SECTION_CATALOG
+  : [];
+
+const POPUP_MDX_TOOL_GROUPS = (typeof AppSchema !== 'undefined' && Array.isArray(AppSchema.MDX_TOOL_GROUPS))
+  ? AppSchema.MDX_TOOL_GROUPS
+  : [];
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
+  renderPopupMdxSectionSettings();
   await loadStats();
   await loadPopupPreferences();
-  await detectVideo();
+  initLlmSelector();
   bindButtons();
+  
+  const settings = await bg('GET_SETTINGS').then(r => r.settings);
+  if (!settings.onboardingCompleted) {
+    // Apri scheda di onboarding a schermo intero
+    chrome.tabs.create({ url: chrome.runtime.getURL('onboarding/onboarding.html') });
+    window.close(); // Chiude il popup
+  } else {
+    await detectVideo();
+  }
 });
+
+// ── Selettore LLM Engine inline ───────────────────────────────────────────────
+
+function initLlmSelector() {
+  const pillGemini = document.getElementById('llm-pill-gemini');
+  const pillOpenai = document.getElementById('llm-pill-openai');
+  const selectGemini = document.getElementById('llm-model-gemini');
+  const selectOpenai = document.getElementById('llm-model-openai');
+  if (!pillGemini || !pillOpenai) return;
+
+  // Carica stato corrente da settings
+  bg('GET_SETTINGS').then(r => {
+    const s = r.settings || {};
+    const isOpenai = s.provider === 'openai';
+    pillGemini.classList.toggle('llm-pill-active', !isOpenai);
+    pillOpenai.classList.toggle('llm-pill-active', isOpenai);
+    if (selectGemini && s.model) {
+      const opt = [...selectGemini.options].find(o => o.value === s.model);
+      if (opt) selectGemini.value = s.model;
+    }
+    if (selectOpenai && s.openaiModel) {
+      const opt = [...selectOpenai.options].find(o => o.value === s.openaiModel);
+      if (opt) selectOpenai.value = s.openaiModel;
+    }
+  }).catch(() => {});
+
+  async function switchProvider(provider) {
+    try {
+      const { settings } = await bg('GET_SETTINGS');
+      const model = provider === 'openai'
+        ? (selectOpenai?.value || settings.openaiModel || 'gpt-4o')
+        : (selectGemini?.value || settings.model || 'gemini-2.5-flash');
+      const patch = provider === 'openai'
+        ? { ...settings, provider: 'openai', openaiModel: model }
+        : { ...settings, provider: 'gemini', model };
+      await bg('SAVE_SETTINGS', { settings: patch });
+      pillGemini.classList.toggle('llm-pill-active', provider === 'gemini');
+      pillOpenai.classList.toggle('llm-pill-active', provider === 'openai');
+      const label = provider === 'openai'
+        ? `OpenAI · ${model}` : `Gemini · ${model}`;
+      if ($('footer-model')) $('footer-model').textContent = label;
+    } catch (e) {}
+  }
+
+  // Click sul pill → cambia provider
+  pillGemini.addEventListener('click', e => {
+    if (e.target === selectGemini) return; // gestito da select
+    switchProvider('gemini');
+  });
+  pillOpenai.addEventListener('click', e => {
+    if (e.target === selectOpenai) return;
+    switchProvider('openai');
+  });
+
+  // Change sul select → cambia modello + attiva provider
+  selectGemini?.addEventListener('change', () => switchProvider('gemini'));
+  selectOpenai?.addEventListener('change', () => switchProvider('openai'));
+}
 
 async function loadPopupPreferences() {
   try {
     const settings = await bg('GET_SETTINGS').then(r => r.settings);
     currentLearningMode = settings.defaultLearningMode || 'study';
+    currentMdxSections = {
+      ...currentMdxSections,
+      ...(settings.mdxSections || {}),
+    };
+    applyPopupMdxSectionSettings(currentMdxSections);
     const providerLabel = settings.provider === 'openai'
       ? `OpenAI · ${settings.openaiModel || 'gpt-5.4-mini'}`
       : `Gemini · ${settings.model || 'gemini-2.5-flash'}`;
     if ($('footer-model')) $('footer-model').textContent = providerLabel;
   } catch {}
+}
+
+function renderPopupMdxSectionSettings() {
+  const container = $('popup-mdx-sections-list');
+  if (!container || !POPUP_MDX_SECTION_CATALOG.length) return;
+  container.innerHTML = POPUP_MDX_SECTION_CATALOG.map(section => `
+    <label class="popup-check-item">
+      <input type="checkbox" data-popup-mdx-section="${section.key}">
+      <span>${section.label}</span>
+    </label>
+  `).join('');
+
+  const groupsContainer = $('popup-mdx-tools-list');
+  if (groupsContainer && POPUP_MDX_TOOL_GROUPS.length) {
+    groupsContainer.innerHTML = POPUP_MDX_TOOL_GROUPS.map(group => `
+      <label class="popup-check-item popup-tool-item">
+        <input type="checkbox" data-popup-mdx-group="${group.key}">
+        <span>${group.label}</span>
+      </label>
+    `).join('');
+    groupsContainer.querySelectorAll('[data-popup-mdx-group]').forEach(input => {
+      input.addEventListener('change', () => {
+        currentMdxSections = AppSchema.applyMdxGroupToggle(
+          collectPopupMdxSectionSettings(),
+          input.getAttribute('data-popup-mdx-group'),
+          input.checked,
+        );
+        applyPopupMdxSectionSettings(currentMdxSections);
+        savePopupMdxSections();
+      });
+    });
+  }
+}
+
+function applyPopupMdxSectionSettings(mdxSections = {}) {
+  document.querySelectorAll('[data-popup-mdx-section]').forEach(input => {
+    const key = input.getAttribute('data-popup-mdx-section');
+    input.checked = Boolean(mdxSections[key]);
+  });
+  document.querySelectorAll('[data-popup-mdx-group]').forEach(groupInput => {
+    const state = AppSchema.mdxGroupState(mdxSections, groupInput.getAttribute('data-popup-mdx-group'));
+    groupInput.checked = state === 'on';
+    groupInput.indeterminate = state === 'mixed';
+  });
+}
+
+function collectPopupMdxSectionSettings() {
+  return POPUP_MDX_SECTION_CATALOG.reduce((acc, section) => {
+    acc[section.key] = Boolean(document.querySelector(`[data-popup-mdx-section="${section.key}"]`)?.checked);
+    return acc;
+  }, {});
+}
+
+function setAllPopupMdxSections(nextValue) {
+  document.querySelectorAll('[data-popup-mdx-section]').forEach(input => {
+    input.checked = Boolean(nextValue);
+  });
+}
+
+async function savePopupMdxSections() {
+  const feedback = $('popup-mdx-save-feedback');
+  try {
+    const { settings } = await bg('GET_SETTINGS');
+    currentMdxSections = collectPopupMdxSectionSettings();
+    await bg('SAVE_SETTINGS', {
+      settings: {
+        ...settings,
+        mdxSections: currentMdxSections,
+      },
+    });
+    if (feedback) {
+      feedback.textContent = 'Sezioni salvate.';
+      feedback.className = 'popup-card-hint success';
+      setTimeout(() => {
+        if (feedback.textContent === 'Sezioni salvate.') {
+          feedback.textContent = '';
+          feedback.className = 'popup-card-hint';
+        }
+      }, 1500);
+    }
+  } catch (e) {
+    if (feedback) {
+      feedback.textContent = `Errore salvataggio: ${e.message}`;
+      feedback.className = 'popup-card-hint';
+    }
+  }
 }
 
 async function loadStats() {
@@ -266,8 +436,9 @@ async function showVideoState(vd, settings) {
   updateStatsDisplay(vd);
 
   try {
-    const { summarized } = await bg('CHECK_VIDEO_SUMMARIZED', { videoId: vd.videoId });
-    if (summarized) show('already-summarized');
+    const status = await bg('CHECK_VIDEO_STATUS', { videoData: vd });
+    applyVideoActionState(status);
+    applyVideoSummaryBanner(status);
   } catch {}
 
   if (!hasProviderKey(settings)) {
@@ -278,6 +449,62 @@ async function showVideoState(vd, settings) {
     }, { once: true });
   }
   showState('video');
+}
+
+function applyVideoSummaryBanner(status = {}) {
+  const alert = $('already-summarized');
+  if (!alert) return;
+
+  if (status.archived) {
+    alert.innerHTML = '✅ Hai già un riepilogo estratto per questo video. <a id="link-existing" href="#" class="alert-link">Vedi nell\'archivio</a>';
+    show('already-summarized');
+    $('link-existing')?.addEventListener('click', handleExistingArchiveLink);
+    return;
+  }
+
+  if (status.queued) {
+    alert.innerHTML = '🕐 Questo video è già in coda e non è ancora stato estratto. <a id="link-existing" href="#" class="alert-link">Apri archivio</a>';
+    show('already-summarized');
+    $('link-existing')?.addEventListener('click', handleExistingArchiveLink);
+    return;
+  }
+
+  hide('already-summarized');
+}
+
+function handleExistingArchiveLink(e) {
+  e.preventDefault();
+  bg('OPEN_DASHBOARD');
+}
+
+function setLockedActionButton(button, label) {
+  if (!button) return;
+  button.textContent = label;
+  button.disabled = true;
+  button.classList.add('btn-success-locked');
+}
+
+function applyVideoActionState(status = {}) {
+  const queueButton = $('btn-add-queue');
+  const creatorButton = $('btn-add-creator');
+
+  if (status.archived) {
+    setLockedActionButton(queueButton, '✓ Già in archivio');
+  } else if (status.queued) {
+    setLockedActionButton(queueButton, '✓ Già in coda');
+  } else if (queueButton) {
+    queueButton.disabled = false;
+    queueButton.classList.remove('btn-success-locked');
+    queueButton.textContent = '🕐 Aggiungi alla coda';
+  }
+
+  if (status.creatorFollowed) {
+    setLockedActionButton(creatorButton, '✓ Creator seguito');
+  } else if (creatorButton) {
+    creatorButton.disabled = false;
+    creatorButton.classList.remove('btn-success-locked');
+    creatorButton.textContent = '➕ Segui Creator';
+  }
 }
 
 function updateStatsDisplay(vd) {
@@ -340,6 +567,10 @@ async function generate() {
   setProgress(10, 'Dati video pronti...');
   try {
     const settings = await bg('GET_SETTINGS').then(r => r.settings);
+    currentMdxSections = {
+      ...currentMdxSections,
+      ...(settings.mdxSections || {}),
+    };
     currentLearningMode = settings.defaultLearningMode || currentLearningMode || 'study';
     const providerLabel = settings.provider === 'openai'
       ? `OpenAI ${settings.openaiModel || 'gpt-5.4-mini'}`
@@ -414,7 +645,20 @@ async function addToQueue() {
   btn.disabled = true;
   try {
     const r = await bg('ADD_TO_QUEUE', { videoData: currentVideoData });
-    btn.textContent = r.success ? '✅ Aggiunto in coda!' : r.reason === 'already_exists' ? '✓ Già in archivio' : '❌ Errore';
+    if (r.success) {
+      setLockedActionButton(btn, '✅ Aggiunto in coda!');
+      applyVideoSummaryBanner({ queued: true, archived: false });
+    } else if (r.reason === 'already_exists') {
+      setLockedActionButton(btn, r.summaryStatus === 'pending' ? '✓ Già in coda' : '✓ Già in archivio');
+      applyVideoSummaryBanner({
+        queued: r.summaryStatus === 'pending',
+        archived: r.summaryStatus === 'extracted',
+      });
+    } else {
+      btn.disabled = false;
+      btn.classList.remove('btn-success-locked');
+      btn.textContent = '❌ Errore';
+    }
   } catch { btn.disabled = false; btn.textContent = '🕐 Aggiungi alla coda'; }
 }
 
@@ -436,7 +680,13 @@ async function addCreator() {
         ? `https://youtube.com/channel/${currentVideoData.channelId}`
         : currentVideoData.channelId,
     });
-    btn.textContent = r.success ? '✅ Creator aggiunto!' : r.reason === 'already_exists' ? '✓ Già seguito' : '❌ Errore';
+    if (r.success || r.reason === 'already_exists') {
+      setLockedActionButton(btn, r.success ? '✅ Creator aggiunto!' : '✓ Creator seguito');
+    } else {
+      btn.disabled = false;
+      btn.classList.remove('btn-success-locked');
+      btn.textContent = '❌ Errore';
+    }
   } catch { btn.disabled = false; btn.textContent = '➕ Segui Creator'; }
 }
 
@@ -447,6 +697,15 @@ function bindButtons() {
   $('btn-settings')?.addEventListener('click', openSettings);
   $('btn-settings-err')?.addEventListener('click', openSettings);
   $('btn-generate')?.addEventListener('click', generate);
+  $('btn-ocr')?.addEventListener('click', async () => {
+    try {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tabs.length > 0) {
+        await chrome.tabs.sendMessage(tabs[0].id, { action: 'startSelection' }).catch(e => console.warn(e));
+      }
+      window.close();
+    } catch (err) { console.warn(err); }
+  });
   $('btn-add-creator')?.addEventListener('click', addCreator);
   $('btn-add-queue')?.addEventListener('click', addToQueue);
   $('btn-refresh-stats')?.addEventListener('click', refreshVideoStats);
@@ -455,8 +714,27 @@ function bindButtons() {
   $('btn-retry')?.addEventListener('click', () => detectVideo());
   $('btn-new')?.addEventListener('click', () => detectVideo());
   $('btn-open-yt')?.addEventListener('click', () => chrome.tabs.create({ url: 'https://youtube.com' }));
-  $('link-existing')?.addEventListener('click', e => { e.preventDefault(); bg('OPEN_DASHBOARD'); });
+  $('link-existing')?.addEventListener('click', handleExistingArchiveLink);
   $('btn-analyze-page')?.addEventListener('click', analyzeWebPage);
+  $('btn-toggle-mdx-structure')?.addEventListener('click', () => {
+    const body = $('popup-mdx-structure');
+    const button = $('btn-toggle-mdx-structure');
+    if (!body || !button) return;
+    const collapsed = !body.classList.contains('hidden');
+    body.classList.toggle('hidden', collapsed);
+    button.setAttribute('data-collapsed', collapsed ? 'true' : 'false');
+  });
+  $('btn-popup-enable-all-sections')?.addEventListener('click', async () => {
+    setAllPopupMdxSections(true);
+    await savePopupMdxSections();
+  });
+  $('btn-popup-disable-all-sections')?.addEventListener('click', async () => {
+    setAllPopupMdxSections(false);
+    await savePopupMdxSections();
+  });
+  document.querySelectorAll('[data-popup-mdx-section]').forEach(input => {
+    input.addEventListener('change', savePopupMdxSections);
+  });
 }
 
 // ── Analisi articolo web ──────────────────────────────────────────────────────
@@ -689,27 +967,47 @@ async function analyzeInstagramPage() {
   } catch (e) { showError(e.message); }
 }
 
-function setArticleProgress(pct, lbl) {
+function setArticleProgress(pct, lbl, etaSeconds) {
   const b = $('article-progress-bar'); if (b) b.style.width = `${pct}%`;
   const l = $('article-progress-step'); if (l && lbl) l.textContent = lbl;
+  const e = $('article-progress-eta');
+  if (e) {
+    if (etaSeconds > 0) {
+      e.textContent = `Tempo stimato: ~${Math.ceil(etaSeconds)}s`;
+      e.style.display = 'block';
+    } else {
+      e.style.display = 'none';
+    }
+  }
 }
 
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.action === 'SUMMARY_PROGRESS')
-    setProgress(msg.percent, msg.step === 'generating' ? 'Analisi AI in corso...' : 'Estrazione tag...');
+  if (msg.action === 'SUMMARY_PROGRESS') {
+    setProgress(msg.percent, msg.step === 'generating' ? 'Analisi AI in corso...' : 'Estrazione tag...', msg.etaSeconds);
+    setArticleProgress(msg.percent, msg.step === 'generating' ? 'Analisi AI in corso...' : 'Estrazione tag...', msg.etaSeconds);
+  }
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function showState(name) {
-  ['not-youtube','loading-info','video','generating','analyzing-page','done','error'].forEach(s =>
+  ['not-youtube','loading-info','video','generating','analyzing-page','done','error', 'onboarding'].forEach(s =>
     $(`state-${s}`)?.classList.add('hidden'));
   $(`state-${name}`)?.classList.remove('hidden');
 }
 function showError(msg) { if ($('error-message')) $('error-message').textContent = msg; showState('error'); }
-function setProgress(pct, lbl) {
+function setProgress(pct, lbl, etaSeconds) {
   const b = $('progress-bar'); if (b) b.style.width = `${pct}%`;
   const l = $('progress-label'); if (l && lbl) l.textContent = lbl;
+  const e = $('progress-eta');
+  if (e) {
+    if (etaSeconds > 0) {
+      e.textContent = `Tempo stimato: ~${Math.ceil(etaSeconds)}s`;
+      e.style.display = 'block';
+    } else {
+      e.style.display = 'none';
+    }
+  }
 }
 function openSettings() { chrome.runtime.openOptionsPage(); }
 function bg(action, data={}) { return chrome.runtime.sendMessage({ action, ...data }); }
