@@ -70,11 +70,12 @@ const GeminiAPI = {
       ],
     };
 
-    const res = await fetch(this.endpoint(model), {
+    const netApi = (typeof NetUtils !== 'undefined') ? NetUtils : (typeof require !== 'undefined' ? require('./net.js') : null);
+    const res = await (netApi ? netApi.fetchWithRetry : fetch)(this.endpoint(model), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify(body),
-    });
+    }, { retries: 3, timeoutMs: 90000 });
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
