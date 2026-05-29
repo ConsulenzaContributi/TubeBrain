@@ -10,6 +10,7 @@ importScripts(
   'renderers/export-formatters.js',
   'utils/transcript.js',
   'utils/storage.js',
+  'utils/net.js',
   'utils/gemini.js',
   'utils/openai.js',
   'utils/ai-provider.js',
