@@ -137,6 +137,8 @@ function bindButtons() {
 
   // Semantic search
   $('btn-semantic-search')?.addEventListener('click', () => triggerSemanticSearch());
+  // Local TF-IDF search
+  $('btn-local-search')?.addEventListener('click', () => triggerLocalSearch());
   $('btn-semantic-reset')?.addEventListener('click', () => resetSemanticSearch());
   
   // Screening buttons
@@ -2492,6 +2494,24 @@ async function triggerSemanticSearch() {
     setTimeout(() => errDiv.remove(), 4000);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '✨ Semantica'; }
+  }
+}
+
+async function triggerLocalSearch() {
+  const query = $('archive-search')?.value?.trim();
+  if (!query) { $('archive-search')?.focus(); return; }
+  const btn = $('btn-local-search');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Ricerca…'; }
+  try {
+    const res = await bg('LOCAL_SEARCH', { query, topK: 20 });
+    if (!res.success) throw new Error(res.error || 'Errore ricerca locale');
+    const results = res.summaries || [];
+    if (results.length === 0) { filterArchive(); return; }
+    renderArchive(results, query);
+  } catch (err) {
+    filterArchive();
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔎 Locale'; }
   }
 }
 

@@ -21,6 +21,7 @@ importScripts(
   // ── Nuovi utils v2.4.0 ────────────────────────────────────────────────────────
   'utils/fsrs.js',
   'utils/analytics.js',
+  'utils/tfidf.js',
   'utils/spaced-repetition.js',
   'utils/adaptive-quiz.js',
   'utils/progress-tracker.js',
@@ -266,6 +267,16 @@ async function handleMessage(message, sender) {
       return { success: true, stats };
     }
     case 'MARK_SECTION_READ':   await ProgressTracker.markSectionRead(message.summaryId, message.sectionName); return { success: true };
+
+    // ── Feature #Fase4C — Ricerca locale TF-IDF ──────────────────────────────
+    case 'LOCAL_SEARCH': {
+      const summaries = await Storage.getSummaries();
+      const docs = summaries.map(s => ({ id: s.id, text: [s.title, (s.tags || []).join(' '), s.markdown || ''].join(' ') }));
+      const index = TfIdf.buildIndex(docs);
+      const ranked = TfIdf.search(message.query || '', index, message.topK || 20).filter(r => r.score > 0);
+      const byId = new Map(summaries.map(s => [s.id, s]));
+      return { success: true, summaries: ranked.map(r => byId.get(r.id)).filter(Boolean) };
+    }
 
     // ── Feature #7 — Export Anki / Obsidian / Mind Map ───────────────────────
     case 'EXPORT_ANKI': {
