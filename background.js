@@ -652,6 +652,14 @@ async function doBackgroundExtraction(id) {
 
     const videoData = { ...pageData, transcript, transcriptSegments, transcriptQuality, captionLang: track?.languageCode, captionType: track?.kind };
 
+    if (!Transcript.hasUsableTranscript(videoData)) {
+      await Storage.updateSummaryById(id, { status: 'pending', extractionStartedAt: null, noCaptions: true });
+      try { chrome.tabs.remove(tab.id); } catch (e) {}
+      await failRuntimeStatus(new Error('Questo video non ha sottotitoli (nemmeno auto-generati): impossibile estrarre. Riprova con un video che abbia i CC attivi.'), tab.windowId || null);
+      showNotification('TubeBrain ⚠️', 'Nessun sottotitolo disponibile per questo video.');
+      return;
+    }
+
     // Genera summary
     await updateRuntimeStatus({
       kicker: 'Estrazione in corso',

@@ -269,6 +269,10 @@ const Transcript = {
       transcriptQuality,
     };
   },
+
+  hasUsableTranscript(videoData = {}) {
+    return typeof videoData.transcript === 'string' && videoData.transcript.trim().length > 0;
+  },
 };
 
 if (typeof module !== 'undefined') module.exports = Transcript;
