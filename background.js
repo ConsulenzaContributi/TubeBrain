@@ -19,6 +19,7 @@ importScripts(
   'utils/filesystem.js',
   'utils/cloud.js',
   // ── Nuovi utils v2.4.0 ────────────────────────────────────────────────────────
+  'utils/fsrs.js',
   'utils/spaced-repetition.js',
   'utils/adaptive-quiz.js',
   'utils/progress-tracker.js',
@@ -2569,6 +2570,15 @@ async function updateQueueSettings(channelId, settings) {
 // ── Allarme schedulato per auto-queue ─────────────────────────────────────────
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === 'review-reminder') {
+    try {
+      const due = await SR.getAllDueCards();
+      if (due.length > 0) {
+        showNotification('TubeBrain · Ripasso', `Hai ${due.length} flashcard da ripassare oggi.`);
+      }
+    } catch (e) {}
+    return;
+  }
   if (alarm.name === 'auto-queue-check') {
     const settings = await Storage.getSettings();
     if (!settings.autoQueueInterval || settings.autoQueueInterval === 'off') return;
@@ -2597,6 +2607,9 @@ function setupAutoQueueAlarm(intervalHours) {
 chrome.storage.sync.get({ autoQueueInterval: '12' }, ({ autoQueueInterval }) => {
   setupAutoQueueAlarm(autoQueueInterval);
 });
+
+// Alarm giornaliero per promemoria ripasso flashcard
+chrome.alarms.create('review-reminder', { periodInMinutes: 24 * 60, delayInMinutes: 60 });
 
 // ── Chat con l'Archivio (RAG) ────────────────────────────────────────────────
 
