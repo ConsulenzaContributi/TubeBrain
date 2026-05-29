@@ -25,14 +25,15 @@ const OpenAIAPI = {
       max_output_tokens: options.maxOutputTokens ?? 8192,
     };
 
-    const res = await fetch(this.RESPONSES_URL, {
+    const netApi = (typeof NetUtils !== 'undefined') ? NetUtils : (typeof require !== 'undefined' ? require('./net.js') : null);
+    const res = await (netApi ? netApi.fetchWithRetry : fetch)(this.RESPONSES_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
-    });
+    }, { retries: 3, timeoutMs: 90000 });
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -60,7 +61,7 @@ const OpenAIAPI = {
   },
 
   async generateLearningSections(videoData, settings) {
-    const prompt = GeminiAPI.buildLearningSectionsPrompt(videoData, settings.language);
+    const prompt = GeminiAPI.buildLearningSectionsPrompt(videoData, settings.language, settings);
     return await this.call(prompt, settings.openaiApiKey, {
       model: this.resolveModel(settings),
       maxOutputTokens: 16384,
