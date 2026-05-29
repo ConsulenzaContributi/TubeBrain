@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Codex_Chrome-PlugIn_YouTube-Learn</title>
+  <title>TubeBrain</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
@@ -13,15 +13,20 @@
     <div class="logo">
       <span class="logo-icon">📚</span>
       <div class="logo-copy">
-        <span class="logo-text">Codex_Chrome-PlugIn_YouTube-Learn</span>
-        <span class="logo-version">v2.2.7</span>
+        <span class="logo-text">TubeBrain</span>
+        <span class="logo-version">A1.0.9</span>
       </div>
+    </div>
+    <div id="header-model-chip" class="header-model-chip" title="Motore AI attivo · modifica in Impostazioni">
+      <span id="hmc-icon">✦</span>
+      <span id="hmc-label">—</span>
     </div>
     <div class="header-actions">
       <button id="btn-dashboard" class="icon-btn" title="Apri Dashboard">⊞</button>
       <button id="btn-settings" class="icon-btn" title="Impostazioni">⚙</button>
     </div>
   </header>
+
 
   <!-- Stato: non su YouTube — offre analisi articolo -->
   <div id="state-not-youtube" class="state hidden">
@@ -46,6 +51,7 @@
         <div id="article-progress-bar" class="progress-bar" style="width:0%"></div>
       </div>
       <p id="article-progress-step" class="state-sub">Estrazione contenuto…</p>
+      <p id="article-progress-eta" class="state-sub" style="margin-top:4px; font-weight:500; color:#495057; display:none;"></p>
     </div>
   </div>
 
@@ -89,6 +95,10 @@
         <span class="btn-icon">✨</span>
         Genera Learning MDX
       </button>
+      <button id="btn-ocr" class="btn btn-secondary" style="margin-top: 8px; margin-bottom: 8px; width: 100%; display: flex; justify-content: center; align-items: center; gap: 6px; background-color: #f1f3f5; color: #495057; border: 1px solid #dee2e6; border-radius: 8px; padding: 10px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;" title="Scorciatoia: Ctrl+Shift+O (MacOS: Cmd+Shift+O)">
+        <span class="btn-icon">📸</span>
+        Cattura Testo a Schermo (OCR)
+      </button>
       <div class="actions-row">
         <button id="btn-add-queue" class="btn btn-ghost btn-half" title="Aggiungi alla coda senza estrarre (⌘⇧P)">
           <span class="btn-icon">🕐</span> Coda
@@ -98,6 +108,29 @@
         </button>
       </div>
     </div>
+
+    <section class="popup-card">
+      <div class="popup-card-head">
+        <div>
+          <p class="popup-card-kicker">Output MDX</p>
+          <h3 class="popup-card-title">Struttura Markdown</h3>
+        </div>
+        <button id="btn-toggle-mdx-structure" class="icon-btn popup-collapse-btn" title="Mostra o nascondi">▾</button>
+      </div>
+      <div id="popup-mdx-structure" class="popup-card-body">
+        <p class="popup-card-text">Attiva o disattiva le sezioni direttamente prima della generazione del file.</p>
+        <div class="popup-inline-actions">
+          <button id="btn-popup-enable-all-sections" class="btn btn-ghost btn-mini" type="button">Attiva tutto</button>
+          <button id="btn-popup-disable-all-sections" class="btn btn-ghost btn-mini" type="button">Disattiva tutto</button>
+        </div>
+        <div id="popup-mdx-tools-list" class="popup-tools-list"></div>
+        <details id="popup-mdx-advanced" class="popup-advanced">
+          <summary>⚙️ Avanzate (controllo per sezione)</summary>
+        <div id="popup-mdx-sections-list" class="popup-check-grid"></div>
+        </details>
+        <p id="popup-mdx-save-feedback" class="popup-card-hint"></p>
+      </div>
+    </section>
   </div>
 
   <!-- Stato: generazione in corso -->
@@ -109,6 +142,7 @@
         <div id="progress-bar" class="progress-bar" style="width:0%"></div>
       </div>
       <p id="progress-step" class="state-sub">Estrazione contenuto in corso</p>
+      <p id="progress-eta" class="state-sub" style="margin-top:4px; font-weight:500; color:#495057; display:none;"></p>
     </div>
   </div>
 
@@ -159,6 +193,8 @@
     <span id="footer-model" class="footer-model"></span>
   </footer>
 
+  <script src="../schemas/app-schema.js"></script>
+  <script src="../utils/filesystem.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
