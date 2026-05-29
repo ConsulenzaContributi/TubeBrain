@@ -316,7 +316,7 @@ async function loadFeed(forceRefresh = false) {
     const creatorSet = [...new Set(allFeed.map(v => v.channelName).filter(Boolean))];
     const sel = $('feed-filter-creator');
     sel.innerHTML = '<option value="">Tutti i creator</option>' +
-      creatorSet.map(c => `<option value="${c}">${c}</option>`).join('');
+      creatorSet.map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('');
 
     renderFeed(allFeed);
     updateWorkspaceInsights();
@@ -978,7 +978,7 @@ function renderCreatorArchiveItem(s, channelId, channelName) {
   const date = s.createdAt
     ? new Date(s.createdAt).toLocaleDateString('it-IT', { day:'2-digit', month:'short', year:'numeric' })
     : '';
-  const tags      = (s.tags || []).slice(0, 3).map(t => `<span class="tag">#${t}</span>`).join('');
+  const tags      = (s.tags || []).slice(0, 3).map(t => `<span class="tag">#${escHtml(t)}</span>`).join('');
   const isPending = s.status === 'pending';
   const cid       = channelId   || s.channelId   || '';
   const cname     = channelName || s.channelName || '';
@@ -1118,7 +1118,7 @@ async function loadSummaries() {
   const channels = [...new Set(allSummaries.map(s => s.channelName).filter(Boolean))];
   $('archive-filter-channel').innerHTML =
     '<option value="">Tutti i canali</option>' +
-    channels.map(c => `<option value="${c}">${c}</option>`).join('');
+    channels.map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('');
 
   // Popola filtro stato
   const statusSel = $('archive-filter-status');
@@ -1145,7 +1145,7 @@ function renderArchive(summaries, highlightQuery = '') {
     const date = s.createdAt
       ? new Date(s.createdAt).toLocaleDateString('it-IT', { day:'2-digit', month:'short', year:'numeric' })
       : '';
-    const tags = (s.tags || []).slice(0, 4).map(t => `<span class="tag">#${t}</span>`).join('');
+    const tags = (s.tags || []).slice(0, 4).map(t => `<span class="tag">#${escHtml(t)}</span>`).join('');
 
     // Snippet full-text
     let snippet = '';
@@ -1153,8 +1153,8 @@ function renderArchive(summaries, highlightQuery = '') {
       const idx = s.markdown.toLowerCase().indexOf(highlightQuery.toLowerCase());
       if (idx !== -1) {
         const start = Math.max(0, idx - 60);
-        const raw   = s.markdown.slice(start, idx + 120).replace(/[#*`\n]/g, ' ');
-        const hl    = raw.replace(new RegExp(highlightQuery, 'gi'), m => `<mark>${m}</mark>`);
+        const raw   = escHtml(s.markdown.slice(start, idx + 120).replace(/[#*`\n]/g, ' '));
+        const hl    = raw.replace(new RegExp(escHtml(highlightQuery).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), m => `<mark>${m}</mark>`);
         snippet = `<p class="archive-snippet">…${hl}…</p>`;
       }
     }
@@ -2256,7 +2256,7 @@ async function loadStats() {
   allTags.forEach(t => { tagCount[t] = (tagCount[t] || 0) + 1; });
   const topTags = Object.entries(tagCount).sort((a,b) => b[1]-a[1]).slice(0, 20);
   $('top-tags').innerHTML = topTags.map(([tag, n]) =>
-    `<span class="tag-cloud-item" style="font-size:${11+Math.min(n*2,8)}px">#${tag} <small>(${n})</small></span>`
+    `<span class="tag-cloud-item" style="font-size:${11+Math.min(n*2,8)}px">#${escHtml(tag)} <small>(${n})</small></span>`
   ).join('');
 }
 
