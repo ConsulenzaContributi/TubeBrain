@@ -239,7 +239,7 @@ function applyInstagramUI(igType) {
   if (subEl)   subEl.textContent   = `Analizza questo ${typeLabel} con Gemini AI`;
   if (hintEl)  hintEl.textContent  = 'Caption, hashtag, testo visibile nella pagina · Note: i Reel non hanno trascrizione audio';
   if (btnEl) {
-    btnEl.innerHTML = `<span class="btn-icon">📸</span> Analizza ${typeLabel} Instagram`;
+    btnEl.innerHTML = `<span class="btn-icon">📸</span> Analizza ${Sanitize.escapeHtml(typeLabel)} Instagram`;
     btnEl.style.display = '';
   }
 }

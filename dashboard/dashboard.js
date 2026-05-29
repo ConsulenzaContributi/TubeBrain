@@ -2177,7 +2177,7 @@ function onMapNodeClick(node, groupEl) {
     const cs = allSummaries.filter(s =>
       s.channelId === node.channelKey || s.channelName === node.label
     );
-    body.innerHTML = `<p style="font-size:12px;color:var(--text2)">${cs.length} video archiviati</p>`;
+    body.innerHTML = `<p style="font-size:12px;color:var(--text2)">${escHtml(cs.length)} video archiviati</p>`;
     $('btn-map-filter').onclick = () => {
       $('archive-filter-channel').value = node.label;
       filterArchive();
