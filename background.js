@@ -1,4 +1,5 @@
-// background.js — Service Worker MV3 — Learning Hub v2.2.7
+// background.js — Service Worker MV3 — Learning Hub v2.12.0
+// Aggiornato con 14 nuove funzionalità (SR, Quiz, Pomodoro, TTS, Annotazioni, ecc.)
 
 importScripts(
   'schemas/app-schema.js',
@@ -13,7 +14,16 @@ importScripts(
   'utils/openai.js',
   'utils/ai-provider.js',
   'utils/markdown-generator.js',
-  'utils/filesystem.js'
+  'utils/filesystem.js',
+  'utils/cloud.js',
+  // ── Nuovi utils v2.4.0 ────────────────────────────────────────────────────────
+  'utils/spaced-repetition.js',
+  'utils/adaptive-quiz.js',
+  'utils/progress-tracker.js',
+  'utils/annotations.js',
+  'utils/study-set.js',
+  'utils/pomodoro.js'
+  // Nota: tts.js usa window.speechSynthesis (solo popup/dashboard, non service worker)
 );
 
 const appReady = initializeApp();
@@ -64,7 +74,25 @@ async function ensureStatusPanel(anchorWindowId = null) {
   return created.tabs?.[0] || null;
 }
 
+let globalEtaTracker = { startTime: 0, lastProgress: 0 };
+
 async function updateRuntimeStatus(status = {}, anchorWindowId = null) {
+  let etaSeconds = 0;
+  if (status.progress > 0 && status.progress < 100) {
+    if (globalEtaTracker.startTime === 0 || status.progress < globalEtaTracker.lastProgress) {
+      globalEtaTracker.startTime = Date.now();
+      globalEtaTracker.lastProgress = status.progress;
+      etaSeconds = 30 * (1 - status.progress/100);
+    } else {
+      const elapsed = Date.now() - globalEtaTracker.startTime;
+      const velocity = status.progress / Math.max(elapsed, 1000); // % per ms
+      etaSeconds = ((100 - status.progress) / velocity) / 1000;
+      globalEtaTracker.lastProgress = status.progress;
+    }
+  } else if (status.progress >= 100) {
+    globalEtaTracker.startTime = 0;
+  }
+
   const next = {
     kind: 'info',
     kicker: 'Operazione in corso',
@@ -75,6 +103,7 @@ async function updateRuntimeStatus(status = {}, anchorWindowId = null) {
     icon: '📚',
     updatedAt: Date.now(),
     autoCloseAt: null,
+    etaSeconds: Math.ceil(etaSeconds),
     ...status,
   };
   await chrome.storage.local.set({ [RUNTIME_STATUS_KEY]: next });
@@ -109,6 +138,40 @@ async function failRuntimeStatus(error, anchorWindowId = null) {
 // ── Message Router ────────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (sender.id !== chrome.runtime.id) {
+    sendResponse({ success: false, error: 'sender non autorizzato' });
+    return false;
+  }
+  if (!message || typeof message !== 'object') {
+    sendResponse({ success: false, error: 'messaggio non valido' });
+    return false;
+  }
+
+  if (message && message.type === 'YT_OCR_CAPTURE') {
+    const winId = sender.tab && sender.tab.windowId != null
+      ? sender.tab.windowId
+      : chrome.windows.WINDOW_ID_CURRENT;
+
+    chrome.tabs.captureVisibleTab(winId, { format: 'png' }, (dataUrl) => {
+      if (chrome.runtime.lastError) {
+        sendResponse({ ok: false, error: chrome.runtime.lastError.message || 'unknown' });
+        return;
+      }
+      sendResponse({ ok: true, dataUrl });
+    });
+    return true;
+  }
+
+  if (
+    message.action === 'ocrResult' ||
+    message.action === 'ocrError' ||
+    message.action === 'ocrProgress' ||
+    message.action === 'selectionCancelled' ||
+    message.action === 'selectionStarted'
+  ) {
+    chrome.runtime.sendMessage(message).catch(() => {});
+  }
+
   appReady
     .then(() => handleMessage(message, sender))
     .then(sendResponse)
@@ -118,6 +181,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 async function handleMessage(message, sender) {
   switch (message.action) {
+    case 'CAPTURE_FRAME':           return await captureFrame(message);
     case 'GENERATE_SUMMARY':        return await generateSummary(message.videoData, message.generationOptions || {});
     case 'SAVE_SUMMARY':            return await saveSummary(message.summary, message.rawMarkdown, message.generationOptions || {});
     case 'ADD_TO_QUEUE':            return await addToQueue(message.videoData);
@@ -141,6 +205,7 @@ async function handleMessage(message, sender) {
     case 'CLEAR_FS_HANDLE':         await FileSystemUtils.clearHandle(); return { success: true };
     case 'GET_STATS':               return { success: true, stats: await Storage.getStats() };
     case 'CHECK_VIDEO_SUMMARIZED':  return await checkVideoSummarized(message.videoId);
+    case 'CHECK_VIDEO_STATUS':      return await checkVideoStatus(message.videoData || {});
     case 'REFRESH_CREATOR_STATS':   return await refreshCreatorStats(message.channelId);
     case 'REFRESH_ALL_CREATORS':    return await refreshAllCreators();
     case 'DEDUPLICATE_CREATORS':    return await deduplicateCreators();
@@ -159,6 +224,109 @@ async function handleMessage(message, sender) {
     case 'QUEUE_CHANNEL_MASS':      return await queueChannelMass(message.channelId, message.filters || {});
     case 'SETUP_AUTO_QUEUE_ALARM':  setupAutoQueueAlarm(message.intervalHours); return { success: true };
     case 'QUEUE_SHORTCUT_TARGET':   return await queueShortcutTarget(message.targetUrl || '', sender?.tab || null);
+
+    // ── Feature #2 — Spaced Repetition ────────────────────────────────────────
+    case 'GET_DUE_CARDS':     return { success: true, cards: await SR.getAllDueCards() };
+    case 'GET_DUE_CARDS_FOR': return { success: true, cards: await SR.getDueCards(message.summaryId) };
+    case 'UPDATE_CARD_SR':    return { success: true, card: await SR.updateCard(message.cardId, message.summaryId, message.quality) };
+
+    // ── Feature #3 — Adaptive Quiz ────────────────────────────────────────────
+    case 'GET_QUIZ_STATS':      return { success: true, stats: await AdaptiveQuiz.getQuizStats(message.summaryId) };
+    case 'RECORD_QUIZ_ANSWER':  return { success: true, result: await AdaptiveQuiz.recordAnswer(message.summaryId, message.questionId, message.isCorrect) };
+
+    // ── Feature #4 — Learning Paths ───────────────────────────────────────────
+    case 'GET_LEARNING_PATHS':  return { success: true, paths: await Storage.getLearningPaths() };
+    case 'SAVE_LEARNING_PATH':  return { success: true, path: await Storage.saveLearningPath(message.path) };
+    case 'DELETE_LEARNING_PATH': await Storage.deleteLearningPath(message.id); return { success: true };
+    case 'ADD_TO_PATH':         return { success: true, path: await Storage.addToLearningPath(message.pathId, message.summaryId) };
+    case 'GENERATE_LEARNING_PATH': return await handleGenerateLearningPath(message.goal);
+
+    // ── Feature #5 — Ricerca Ranked ───────────────────────────────────────────
+    case 'SEARCH_RANKED':       return { success: true, summaries: await Storage.searchSummariesRanked(message.query) };
+
+    // ── Feature #6 — Progress Tracking ───────────────────────────────────────
+    case 'GET_PROGRESS':        return { success: true, progress: await ProgressTracker.getProgress(message.summaryId) };
+    case 'GET_GLOBAL_STATS':    return { success: true, stats: await ProgressTracker.getGlobalStats() };
+    case 'MARK_SECTION_READ':   await ProgressTracker.markSectionRead(message.summaryId, message.sectionName); return { success: true };
+
+    // ── Feature #7 — Export Anki / Obsidian / Mind Map ───────────────────────
+    case 'EXPORT_ANKI': {
+      const summaries7a = await Storage.getSummaries();
+      const s7a = summaries7a.find(s => s.id === message.id);
+      if (!s7a) throw new Error('Summary non trovato');
+      const content7a = ExportFormatters.buildAnkiCsv(s7a);
+      const titleSafe7a = sanitizePath(s7a.title || 'anki').slice(0, 60);
+      const blob7a = new Blob([content7a], { type: 'text/csv;charset=utf-8' });
+      const dataUrl7a = await blobToDataUrl(blob7a);
+      await chrome.downloads.download({ url: dataUrl7a, filename: `LearningHub/Anki/${titleSafe7a}.csv`, saveAs: false, conflictAction: 'uniquify' });
+      return { success: true };
+    }
+    case 'EXPORT_OBSIDIAN': {
+      const summaries7b = await Storage.getSummaries();
+      const s7b = summaries7b.find(s => s.id === message.id);
+      if (!s7b) throw new Error('Summary non trovato');
+      const content7b = ExportFormatters.buildObsidianMd(s7b);
+      const titleSafe7b = sanitizePath(s7b.title || 'note').slice(0, 60);
+      const blob7b = new Blob([content7b], { type: 'application/octet-stream;charset=utf-8' });
+      const dataUrl7b = await blobToDataUrl(blob7b);
+      await chrome.downloads.download({ url: dataUrl7b, filename: `LearningHub/Obsidian/${titleSafe7b}.md`, saveAs: false, conflictAction: 'uniquify' });
+      return { success: true };
+    }
+    case 'EXPORT_MINDMAP': {
+      const summaries10 = await Storage.getSummaries();
+      const s10 = summaries10.find(s => s.id === message.id);
+      if (!s10) throw new Error('Summary non trovato');
+      const html10 = ExportFormatters.buildMermaidHtml(s10);
+      if (!html10) return { success: false, reason: 'no_mermaid' };
+      const titleSafe10 = sanitizePath(s10.title || 'mindmap').slice(0, 60);
+      const blob10 = new Blob([html10], { type: 'text/html;charset=utf-8' });
+      const dataUrl10 = await blobToDataUrl(blob10);
+      await chrome.downloads.download({ url: dataUrl10, filename: `LearningHub/MindMap/${titleSafe10}.html`, saveAs: false, conflictAction: 'uniquify' });
+      return { success: true };
+    }
+
+    // ── Esportazione Globale (Backup) ─────────────────────────────────────────
+    case 'EXPORT_GLOBAL_ARCHIVE': {
+      const summariesBackup = await Storage.getSummaries();
+      const backupData = {
+        version: chrome.runtime.getManifest().version,
+        timestamp: new Date().toISOString(),
+        summaries: summariesBackup
+      };
+      const jsonContent = JSON.stringify(backupData, null, 2);
+      const blobBackup = new Blob([jsonContent], { type: 'application/json;charset=utf-8' });
+      const dataUrlBackup = await blobToDataUrl(blobBackup);
+      const dateStr = new Date().toISOString().split('T')[0];
+      await chrome.downloads.download({ 
+        url: dataUrlBackup, 
+        filename: `LearningHub/Backup/LearningHub_Backup_${dateStr}.json`, 
+        saveAs: true 
+      });
+      return { success: true };
+    }
+
+    // ── Feature #8 — Annotazioni ──────────────────────────────────────────────
+    case 'SAVE_ANNOTATION':   return { success: true, annotation: await Annotations.save(message.summaryId, message.annotation) };
+    case 'GET_ANNOTATIONS':   return { success: true, annotations: await Annotations.getForSummary(message.summaryId) };
+    case 'DELETE_ANNOTATION': await Annotations.delete(message.annotationId); return { success: true };
+
+    // ── Feature #9 — Confronto video ─────────────────────────────────────────
+    case 'COMPARE_VIDEOS':    return await compareVideos(message.idA, message.idB);
+
+    // ── Feature #14 — Test Pre/Post ───────────────────────────────────────────
+    case 'SAVE_PRE_TEST':     await Storage.savePreTest(message.summaryId, message.answers); return { success: true };
+    case 'GET_PRE_TEST':      return { success: true, data: await Storage.getPreTest(message.summaryId) };
+    case 'SAVE_POST_TEST':    await Storage.savePostTest(message.summaryId, message.answers); return { success: true };
+    case 'GET_TEST_DELTA':    return { success: true, delta: await Storage.getTestDelta(message.summaryId) };
+
+    // ── Feature #15 — Study Set ───────────────────────────────────────────────
+    case 'EXPORT_STUDY_SET': {
+      const summaries15 = await Storage.getSummaries();
+      const s15 = summaries15.find(s => s.id === message.summaryId);
+      if (!s15) throw new Error('Summary non trovato');
+      return { success: true, studySet: StudySet.export(s15) };
+    }
+
     default: throw new Error(`Azione non riconosciuta: ${message.action}`);
   }
 }
@@ -171,7 +339,7 @@ chrome.commands.onCommand.addListener(async (command) => {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.url?.includes('youtube.com/')) {
-      showNotification('Codex_Chrome-PlugIn_YouTube-Learn', 'Apri YouTube e posizionati su un video o una miniatura.');
+      showNotification('TubeBrain', 'Apri YouTube e posizionati su un video o una miniatura.');
       return;
     }
 
@@ -188,14 +356,14 @@ chrome.commands.onCommand.addListener(async (command) => {
     const targetUrl = await resolveShortcutTargetUrl(tab);
     if (!targetUrl) {
       await failRuntimeStatus(new Error('Nessun video YouTube rilevato dalla scorciatoia.'), tab?.windowId || null);
-      showNotification('Codex_Chrome-PlugIn_YouTube-Learn ⚠️', 'Sposta il mouse sopra una miniatura video oppure apri il video prima di usare la scorciatoia.');
+      showNotification('TubeBrain ⚠️', 'Sposta il mouse sopra una miniatura video oppure apri il video prima di usare la scorciatoia.');
       return;
     }
 
     await queueVideoFromUrl(targetUrl, tab);
   } catch (e) {
     await failRuntimeStatus(e, tab?.windowId || null);
-    showNotification('Codex_Chrome-PlugIn_YouTube-Learn ❌', e.message);
+    showNotification('TubeBrain ❌', e.message);
   }
 });
 
@@ -214,13 +382,13 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     const targetUrl = resolveContextMenuTargetUrl(info, tab);
     if (!targetUrl) {
       await failRuntimeStatus(new Error('Nessun video YouTube rilevato dal menu contestuale.'), tab?.windowId || null);
-      showNotification('Codex_Chrome-PlugIn_YouTube-Learn ⚠️', 'Nessun video YouTube rilevato dal menu contestuale.');
+      showNotification('TubeBrain ⚠️', 'Nessun video YouTube rilevato dal menu contestuale.');
       return;
     }
     await queueVideoFromUrl(targetUrl, tab);
   } catch (e) {
     await failRuntimeStatus(e, tab?.windowId || null);
-    showNotification('Codex_Chrome-PlugIn_YouTube-Learn ❌', e.message);
+    showNotification('TubeBrain ❌', e.message);
   }
 });
 
@@ -303,6 +471,7 @@ async function addToQueue(videoData) {
       videoQueued: true,
       creatorAdded: false,
       creatorFollowed: alreadyFollowed,
+      summaryStatus: exists.status || 'pending',
     };
   }
   const settings = await Storage.getSettings();
@@ -361,7 +530,7 @@ async function startBackgroundExtraction(id) {
   // Risponde subito, esegue in background
   doBackgroundExtraction(id).catch(err => {
     failRuntimeStatus(err).catch(() => {});
-    showNotification('Codex_Chrome-PlugIn_YouTube-Learn ❌', `Errore estrazione: ${err.message}`);
+    showNotification('TubeBrain ❌', `Errore estrazione: ${err.message}`);
   });
   return { success: true, queued: true };
 }
@@ -463,7 +632,7 @@ async function doBackgroundExtraction(id) {
     const markdown = MarkdownGenerator.buildLearningDocument(
       { ...videoData, learningMode, outputFormat: settings.outputFormat || 'mdx' },
       aiSections,
-      { learningMode }
+      { learningMode, outputFormat: settings.outputFormat || 'mdx', mdxSections: settings.mdxSections }
     );
     await updateRuntimeStatus({
       kicker: 'Estrazione in corso',
@@ -476,7 +645,11 @@ async function doBackgroundExtraction(id) {
     const tags = await ensureVideoTags(videoData, settings);
     const tagGraph = buildTagMapGraph(tags, videoData);
 
-    const fullMarkdown = MarkdownGenerator.addFrontmatter(markdown, { ...pending, tags }, tags);
+    const fullMarkdown = MarkdownGenerator.addFrontmatter(markdown, { ...pending, tags }, tags, {
+      learningMode,
+      outputFormat: settings.outputFormat || 'mdx',
+      mdxSections: settings.mdxSections,
+    });
     const pubDate      = pending.publishDate || pageData.publishDate || new Date().toISOString().slice(0, 10);
 
     // Salva file (vault diretto o fallback Downloads)
@@ -484,7 +657,8 @@ async function doBackgroundExtraction(id) {
       fullMarkdown,
       pending.channelName,
       pending.title,
-      pubDate
+      pubDate,
+      videoData
     );
 
     await updateRuntimeStatus({
@@ -513,7 +687,16 @@ async function doBackgroundExtraction(id) {
       detail: 'Estratto, taggato e salvato correttamente.',
       icon: '✅',
     }, tab.windowId || null);
-    showNotification('📚 Codex_Chrome-PlugIn_YouTube-Learn — Completato!', `"${pending.title?.slice(0,50)}" estratto e salvato.`);
+    showNotification('📚 TubeBrain — Completato!', `"${pending.title?.slice(0,50)}" estratto e salvato.`);
+
+    // ── Feature #13 — Video correlati (YouTube API, non bloccante) ───────────────
+    suggestRelatedVideos({ videoId: pending.videoId, ...pageData }, settings)
+      .then(related => {
+        if (related?.length) {
+          Storage.updateSummaryById(id, { relatedVideos: related }).catch(() => {});
+        }
+      })
+      .catch(() => {});
 
   } finally {
     // Chiudi tab aperta in background
@@ -589,24 +772,37 @@ async function generateSummary(videoData, generationOptions = {}) {
     transcriptQuality,
   };
 
-  chrome.runtime.sendMessage({ action: 'SUMMARY_PROGRESS', step: 'generating', percent: 20 }).catch(() => {});
+  chrome.runtime.sendMessage({ action: 'SUMMARY_PROGRESS', step: 'generating', percent: 20, etaSeconds: 25 }).catch(() => {});
   const aiSections = await AIProvider.generateLearningSections(enrichedVideoData, settings);
   const learningMode = generationOptions.learningMode || settings.defaultLearningMode || 'study';
   const markdown = MarkdownGenerator.buildLearningDocument(
     { ...enrichedVideoData, learningMode, outputFormat: settings.outputFormat || 'mdx' },
     aiSections,
-    { learningMode }
+    { learningMode, outputFormat: settings.outputFormat || 'mdx', mdxSections: settings.mdxSections }
   );
 
-  chrome.runtime.sendMessage({ action: 'SUMMARY_PROGRESS', step: 'extracting_tags', percent: 80 }).catch(() => {});
+  chrome.runtime.sendMessage({ action: 'SUMMARY_PROGRESS', step: 'extracting_tags', percent: 80, etaSeconds: 5 }).catch(() => {});
   const tags = await ensureVideoTags(videoData, settings);
 
   return { success: true, markdown, tags, transcriptQuality };
 }
 
+// ── Helper: Gestione Frame (Visual Notes) ───────────────────────────────────
+
+async function captureFrame(message) {
+  const { videoId, timestampStr, base64Data } = message;
+  try {
+    await Storage.saveVideoFrame(videoId, timestampStr, base64Data);
+    return { success: true };
+  } catch (err) {
+    console.error('Errore salvataggio frame:', err);
+    return { success: false, error: err.message };
+  }
+}
+
 // ── Helper: salva file MD (vault diretto o fallback download) ─────────────────
 
-async function saveMarkdownFile(content, channelName, title, publishDate) {
+async function saveMarkdownFile(content, channelName, title, publishDate, summaryMeta = null) {
   const channelFolder = sanitizePath(channelName || 'Unknown_Channel');
   const pubDate       = publishDate || new Date().toISOString().slice(0, 10);
   const year          = pubDate.slice(0, 4) || String(new Date().getFullYear());
@@ -614,25 +810,107 @@ async function saveMarkdownFile(content, channelName, title, publishDate) {
   const settings = await Storage.getSettings();
   const extension = settings.outputFormat || 'mdx';
 
-  // Percorso relativo (sotto la cartella vault o sotto Downloads/LearningHub)
-  const relativePath = `${channelFolder}/${year}/${pubDate.slice(0, 10)}_${titleSafe}.${extension}`;
-  const fullPath     = `LearningHub/${relativePath}`;
+  // Costruzione gerarchia cartelle in base all'Archive Strategy
+  let dossierFolder = `${channelFolder}`; // default: author-first
+  
+  if (settings.archiveStrategy === 'chronological') {
+    dossierFolder = `${year}/${channelFolder}`;
+  }
+  const mainRelativePath = `${dossierFolder}/${pubDate.slice(0, 10)}_${titleSafe}.${extension}`;
 
-  // ── Tentativo 1: File System Access API → scrittura diretta, nessun dialogo ─
+  // Se abbiamo meta e FileSystem API, estraiamo le sezioni e scriviamo file separati
   if (settings.useFileSystemApi) {
-    const fsResult = await FileSystemUtils.trySaveToVault(relativePath, content).catch(() => null);
-    if (fsResult?.success) {
-      return { downloadId: null, savedFilename: relativePath, method: 'vault' };
-    }
-    // Se il permesso è scaduto, segnalalo nella notifica ma continua col fallback
-    if (fsResult?.reason === 'permission_denied') {
-      showNotification('Codex_Chrome-PlugIn_YouTube-Learn ⚠️',
-        'Permesso cartella vault scaduto. Ri-seleziona la cartella nelle Impostazioni. File salvato in Download.');
+    try {
+      const fsResult = await FileSystemUtils.trySaveToVault(mainRelativePath, content);
+      if (fsResult?.success) {
+        if (summaryMeta) {
+          const sections = MarkdownGenerator.splitLearningSections(content);
+          const transcript = MarkdownGenerator.resolveTranscriptText(summaryMeta);
+          if (transcript) await FileSystemUtils.trySaveToVault(`${dossierFolder}/${pubDate.slice(0, 10)}_${titleSafe}_Transcript.${extension}`, transcript);
+          if (sections.study) await FileSystemUtils.trySaveToVault(`${dossierFolder}/${pubDate.slice(0, 10)}_${titleSafe}_Action_Plan.${extension}`, sections.study);
+          if (sections.assets) {
+            await FileSystemUtils.trySaveToVault(`${dossierFolder}/${pubDate.slice(0, 10)}_${titleSafe}_Assets.${extension}`, sections.assets);
+            const glossaryItems = MarkdownGenerator.parseGlossary(sections.assets);
+            if (glossaryItems && glossaryItems.length > 0) {
+              const glossaryLines = glossaryItems.map(item => `| ${item.term} | ${item.definition} | ${item.why || ''} |`).join('\n');
+              const glossaryBlock = `\n### Da: ${titleSafe}\n| Termine | Definizione | Perché conta |\n|---|---|---|\n${glossaryLines}\n`;
+              await FileSystemUtils.tryAppendToVault(`Global_Glossary.${extension}`, glossaryBlock);
+            }
+          }
+          
+          // ── Feature: Code Snippet Repository ──
+          // Estrai tutti i blocchi di codice marcati con "### File: percorso/nomefile.ext"
+          // e salvali fisicamente nella sottocartella /code/
+          let updatedContent = content;
+          const fileRegex = /###\s*File:\s*([^\n]+)\n\`\`\`[a-zA-Z0-9_-]*\n([\s\S]*?)\n\`\`\`/g;
+          let match;
+          while ((match = fileRegex.exec(content)) !== null) {
+            const filePath = match[1].trim();
+            const codeContent = match[2].trim();
+            if (filePath && codeContent) {
+              await FileSystemUtils.trySaveToVault(`${dossierFolder}/code/${filePath}`, codeContent);
+            }
+          }
+          
+          // ── Feature: Visual Notes (Screenshot) ──
+          // Estrai i frame salvati per questo video e scrivili in /assets/
+          if (summaryMeta.videoId) {
+            const frames = await Storage.getVideoFrames(summaryMeta.videoId);
+            if (frames && frames.length > 0) {
+              let assetsMarkdown = `\n\n## 📸 Visual Notes (Screenshot)\n\n`;
+              for (let i = 0; i < frames.length; i++) {
+                const f = frames[i];
+                // Sostituisci i : nel nome file per compatibilità (es. 12:34 -> 12m34s)
+                const safeTs = f.timestampStr.replace(/:/g, 'm') + 's';
+                const filename = `frame_${safeTs}_${i}.jpg`;
+                
+                // Converte base64 in ArrayBuffer (salvataggio binario)
+                const base64Data = f.base64Data.split(',')[1];
+                const binaryString = atob(base64Data);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let j = 0; j < binaryString.length; j++) {
+                  bytes[j] = binaryString.charCodeAt(j);
+                }
+                
+                await FileSystemUtils.trySaveToVault(`${dossierFolder}/assets/${filename}`, bytes);
+                assetsMarkdown += `![Frame ${f.timestampStr}](./assets/${filename})\n\n`;
+              }
+              // Aggiungi le immagini al documento Markdown principale
+              updatedContent += assetsMarkdown;
+              await FileSystemUtils.tryAppendToVault(mainRelativePath, assetsMarkdown);
+              
+              // Elimina i frame dal DB locale dopo l'estrazione
+              await Storage.deleteVideoFrames(summaryMeta.videoId);
+            }
+          }
+          
+          // ── Feature: Spaced Repetition (Esportazione Anki in CSV) ──
+          // Estrai il blocco CSV delle flashcard e salvalo in Anki_Deck.csv
+          const flashcardRegex = /\`\`\`csv\n(Q:[\s\S]*?)\n\`\`\`/i;
+          const flashcardMatch = content.match(flashcardRegex);
+          if (flashcardMatch && flashcardMatch[1]) {
+            const csvData = flashcardMatch[1].trim();
+            if (csvData) {
+              await FileSystemUtils.trySaveToVault(`${dossierFolder}/Anki_Deck.csv`, csvData);
+            }
+          }
+          
+        }
+        return { downloadId: null, savedFilename: mainRelativePath, method: 'vault', updatedContent };
+      }
+      if (fsResult?.reason === 'permission_denied') {
+        showNotification('TubeBrain ⚠️',
+          'Permesso cartella vault scaduto. Ri-seleziona la cartella nelle Impostazioni. File salvato in Download.');
+      }
+    } catch(err) {
+      console.warn('Errore vault diretto:', err);
     }
   }
 
   // ── Fallback: chrome.downloads (va nella cartella Download di Chrome) ────────
-  const blob    = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+  // Nel fallback scarichiamo solo il file indice
+  const fullPath     = `LearningHub/${mainRelativePath}`;
+  const blob    = new Blob([content], { type: 'application/octet-stream;charset=utf-8' });
   const dataUrl = await blobToDataUrl(blob);
   const downloadId = await new Promise((resolve, reject) =>
     chrome.downloads.download(
@@ -640,7 +918,7 @@ async function saveMarkdownFile(content, channelName, title, publishDate) {
       id => chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve(id)
     )
   );
-  return { downloadId, savedFilename: fullPath, method: 'downloads' };
+  return { downloadId, savedFilename: fullPath, method: 'downloads', updatedContent: content };
 }
 
 // ── Salvataggio con struttura gerarchica ──────────────────────────────────────
@@ -655,15 +933,18 @@ async function saveSummary(summaryMeta, rawMarkdown, generationOptions = {}) {
     rawMarkdown,
     { ...summaryMeta, learningMode, outputFormat },
     tags,
-    { learningMode, outputFormat }
+    { learningMode, outputFormat, mdxSections: settings.mdxSections }
   );
 
-  const { downloadId, savedFilename } = await saveMarkdownFile(
+  const { downloadId, savedFilename, updatedContent } = await saveMarkdownFile(
     fullMarkdown,
     summaryMeta.channelName,
     summaryMeta.title,
-    summaryMeta.publishDate
+    summaryMeta.publishDate,
+    summaryMeta
   );
+  
+  const finalMarkdown = updatedContent || fullMarkdown;
 
   // Controlla se esiste già come pending e aggiorna, altrimenti crea
   const existing = (await Storage.getSummaries()).find(
@@ -686,7 +967,7 @@ async function saveSummary(summaryMeta, rawMarkdown, generationOptions = {}) {
       contentType: summaryMeta.contentType || classifyQueueContentType({ durationSec: summaryMeta.duration || 0, liveBroadcastContent: summaryMeta.liveBroadcastContent || 'none' }),
       durationBucket: summaryMeta.durationBucket || getDurationBucket(summaryMeta.duration || 0),
       liveBroadcastContent: summaryMeta.liveBroadcastContent || 'none',
-    }, rawMarkdown, fullMarkdown, { downloadId, savedFilename }));
+    }, rawMarkdown, finalMarkdown, { downloadId, savedFilename }));
   } else {
     saved = await Storage.saveSummary(LearningDocument.buildExtractedSummary({
       ...summaryMeta,
@@ -702,7 +983,23 @@ async function saveSummary(summaryMeta, rawMarkdown, generationOptions = {}) {
       contentType: summaryMeta.contentType || classifyQueueContentType({ durationSec: summaryMeta.duration || 0, liveBroadcastContent: summaryMeta.liveBroadcastContent || 'none' }),
       durationBucket: summaryMeta.durationBucket || getDurationBucket(summaryMeta.duration || 0),
       liveBroadcastContent: summaryMeta.liveBroadcastContent || 'none',
-    }, rawMarkdown, fullMarkdown, { downloadId, savedFilename }));
+    }, rawMarkdown, finalMarkdown, { downloadId, savedFilename }));
+  }
+
+  // ── Feature: Cloud Sync (Notion / GitHub) ──
+  if (settings.cloudSyncMode && settings.cloudSyncMode !== 'none') {
+    try {
+      if (settings.cloudSyncMode === 'github' || settings.cloudSyncMode === 'both') {
+        await CloudSync.syncToGitHub(finalMarkdown, summaryMeta.title, summaryMeta, settings);
+        console.log('Sincronizzazione GitHub completata con successo');
+      }
+      if (settings.cloudSyncMode === 'notion' || settings.cloudSyncMode === 'both') {
+        await CloudSync.syncToNotion(finalMarkdown, summaryMeta.title, summaryMeta, settings);
+        console.log('Sincronizzazione Notion completata con successo');
+      }
+    } catch (err) {
+      console.error('Errore durante Cloud Sync:', err);
+    }
   }
 
   await Storage.incrementStat();
@@ -1205,14 +1502,19 @@ async function redownloadSummary(id) {
   const s = summaries.find(x => x.id === id);
   if (!s) throw new Error('Riepilogo non trovato');
 
-  const content = s.fullMarkdown || s.markdown || '';
-  const blob    = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+  const content = s.fullMarkdown || s.markdown || '';  // Usa text/plain per impedire a Chrome di rinominare in .md
+  const blob    = new Blob([content], { type: 'application/octet-stream;charset=utf-8' });
   const dataUrl = await blobToDataUrl(blob);
   const channelFolder = sanitizePath(s.channelName || 'Unknown_Channel');
   const pubDate  = s.publishDate || new Date(s.createdAt).toISOString().slice(0, 10);
   const year     = pubDate.slice(0, 4);
   const titleSafe = sanitizePath(s.title || 'video').slice(0, 60);
-  const filename  = s.savedFilename || `LearningHub/${channelFolder}/${year}/${pubDate.slice(0,10)}_${titleSafe}.${s.outputFormat || 'mdx'}`;
+  const settings = await Storage.getSettings();
+  let dossierFolder = `${channelFolder}`;
+  if (settings.archiveStrategy === 'chronological') {
+    dossierFolder = `${year}/${channelFolder}`;
+  }
+  const filename  = s.savedFilename || `LearningHub/${dossierFolder}/${pubDate.slice(0,10)}_${titleSafe}.${s.outputFormat || 'mdx'}`;
 
   await chrome.downloads.download({ url: dataUrl, filename, saveAs: false, conflictAction: 'uniquify' });
   return { success: true };
@@ -1234,7 +1536,12 @@ async function exportSummary(id, format = 'mdx') {
   const year = pubDate.slice(0, 4);
   const titleSafe = sanitizePath(summary.title || 'video').slice(0, 60);
   const suffix = format === 'antigravity' ? '_antigravity' : `_${format}`;
-  const filename = `LearningHub/${channelFolder}/${year}/${pubDate.slice(0,10)}_${titleSafe}${suffix}.${extension}`;
+  const settings = await Storage.getSettings();
+  let dossierFolder = `${channelFolder}`;
+  if (settings.archiveStrategy === 'chronological') {
+    dossierFolder = `${year}/${channelFolder}`;
+  }
+  const filename = `LearningHub/${dossierFolder}/${pubDate.slice(0,10)}_${titleSafe}${suffix}.${extension}`;
 
   const blob = new Blob([content], { type: mime });
   const dataUrl = await blobToDataUrl(blob);
@@ -1267,7 +1574,7 @@ async function ensureContextMenus() {
   await chrome.contextMenus.removeAll();
   chrome.contextMenus.create({
     id: QUEUE_CONTEXT_MENU_ID,
-    title: 'Codex: accoda video + segui creator',
+    title: 'Claude: accoda video + segui creator',
     contexts: ['link', 'image', 'page', 'video'],
     documentUrlPatterns: ['*://*.youtube.com/*'],
   });
@@ -1498,7 +1805,7 @@ async function extractAllPending(ids) {
   let started = 0;
   for (const id of ids) {
     doBackgroundExtraction(id).catch(err => {
-      showNotification('Codex_Chrome-PlugIn_YouTube-Learn ❌', `Errore estrazione: ${err.message}`);
+      showNotification('TubeBrain ❌', `Errore estrazione: ${err.message}`);
     });
     started++;
     await delay(800); // piccola pausa tra le richieste
@@ -1648,9 +1955,52 @@ function decodeXml(s) {
 }
 
 async function checkVideoSummarized(videoId) {
+  if (!videoId) return { success: true, summarized: false, summary: null };
   const summaries = await Storage.getSummaries();
-  const found = summaries.find(s => s.videoId === videoId);
+  const found = summaries.find(s => s.videoId === videoId && s.status === 'extracted');
   return { success: true, summarized: !!found, summary: found || null };
+}
+
+async function checkVideoStatus(videoData = {}) {
+  if (!videoData?.videoId) {
+    return {
+      success: true,
+      summarized: false,
+      queued: false,
+      archived: false,
+      creatorFollowed: false,
+      summary: null,
+      creator: null,
+      summaryStatus: 'missing',
+    };
+  }
+
+  const [summaries, creators] = await Promise.all([
+    Storage.getSummaries(),
+    Storage.getCreators(),
+  ]);
+
+  const foundSummary = summaries.find(summary => summary.videoId === videoData.videoId);
+  const normalizeName = value => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const creatorMatch = creators.find(creator => {
+    if (videoData.channelId) {
+      return Boolean(creator.channelId) && creator.channelId === videoData.channelId;
+    }
+    if (creator.channelId) return false;
+    return normalizeName(creator.channelName) && normalizeName(creator.channelName) === normalizeName(videoData.channelName);
+  });
+  const summaryStatus = foundSummary?.status || 'missing';
+
+  return {
+    success: true,
+    summarized: summaryStatus === 'extracted',
+    queued: summaryStatus === 'pending',
+    archived: summaryStatus === 'extracted',
+    creatorFollowed: Boolean(creatorMatch),
+    summary: foundSummary || null,
+    creator: creatorMatch || null,
+    summaryStatus,
+  };
 }
 
 async function fetchYouTubeChannelInfo(channelId, apiKey) {
@@ -1931,7 +2281,8 @@ async function analyzeWebpage(articleData) {
     fullMarkdown,
     folderName,
     articleData.title,
-    pubDate
+    pubDate,
+    null
   );
 
   // Aggiungi all'archivio con la piattaforma corretta
@@ -1961,8 +2312,8 @@ async function analyzeWebpage(articleData) {
   await Storage.incrementStat();
 
   const notifMsg = isInstagram
-    ? `📸 Codex_Chrome-PlugIn_YouTube-Learn — Instagram salvato!`
-    : `📄 Codex_Chrome-PlugIn_YouTube-Learn — Articolo salvato!`;
+    ? `📸 TubeBrain — Instagram salvato!`
+    : `📄 TubeBrain — Articolo salvato!`;
   showNotification(notifMsg,
     `"${(articleData.title || '').slice(0, 60)}" analizzato e salvato.`);
 
@@ -2028,12 +2379,44 @@ async function checkAndQueueNewVideos(filterChannelId = null) {
           startBackgroundExtraction(saved.id).catch(() => {});
         }
       } else {
-        // Creator normale: solo coda
-        const res = await addToQueue(videoData);
-        if (res.success) {
-          queuedIds.add(v.videoId);
-          queued++;
-          totalQueued++;
+        // Creator normale: Screening AI
+        const pitch = await AIProvider.generateScreeningPitch(videoData, settings).catch(() => null);
+        
+        if (settings.autoExtractHighRelevance && pitch && pitch.score >= 9) {
+          // Auto-estrazione immediata per Score alto
+          const summaries = await Storage.getSummaries();
+          if (!summaries.find(s => s.videoId === v.videoId)) {
+            const saved = await Storage.saveSummary({
+              videoId: v.videoId, title: v.title,
+              channelName: creator.channelName, channelId: creator.channelId,
+              publishDate: v.publishedAt || '', url: v.url || `https://youtube.com/watch?v=${v.videoId}`,
+              markdown: null, fullMarkdown: null, tags: [], status: 'pending',
+              platform: 'youtube',
+              thumbnail: v.thumbnail || `https://i.ytimg.com/vi/${v.videoId}/mqdefault.jpg`,
+              duration: v.durationSec || 0,
+              contentType: v.contentType || 'video',
+              durationBucket: v.durationBucket || getDurationBucket(v.durationSec || 0),
+              liveBroadcastContent: v.liveBroadcastContent || 'none',
+              aiPitch: pitch // Conserva il pitch se si vuole visualizzarlo
+            });
+            startBackgroundExtraction(saved.id).catch(() => {});
+            queuedIds.add(v.videoId);
+            queued++;
+            totalQueued++;
+          }
+        } else {
+          // Screening normale: va in coda
+          const queueItem = {
+            ...videoData,
+            status: pitch ? 'screened' : 'queued',
+            aiPitch: pitch
+          };
+          const res = await addToQueue(queueItem);
+          if (res.success) {
+            queuedIds.add(v.videoId);
+            queued++;
+            totalQueued++;
+          }
         }
       }
     }
@@ -2051,7 +2434,7 @@ async function checkAndQueueNewVideos(filterChannelId = null) {
 async function queueAllNew() {
   const result = await checkAndQueueNewVideos(null);
   if (result.totalQueued > 0) {
-    showNotification('📚 Codex_Chrome-PlugIn_YouTube-Learn — Coda aggiornata',
+    showNotification('📚 TubeBrain — Coda aggiornata',
       `${result.totalQueued} nuov${result.totalQueued === 1 ? 'o video accodato' : 'i video accodati'} dai creator seguiti.`);
   }
   return result;
@@ -2145,7 +2528,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (!settings.autoQueueInterval || settings.autoQueueInterval === 'off') return;
     const result = await checkAndQueueNewVideos(null);
     if (result.totalQueued > 0) {
-      showNotification('📚 Codex_Chrome-PlugIn_YouTube-Learn — Nuovi video',
+      showNotification('📚 TubeBrain — Nuovi video',
         `${result.totalQueued} nuov${result.totalQueued === 1 ? 'o video' : 'i video'} accodati automaticamente.`);
     }
   }
@@ -2292,6 +2675,57 @@ async function checkTopicsAndNotify(filterChannelId = null) {
   return { success: true, checked: newVideoIds.length, notified: toNotify.length };
 }
 
+// ── Feature #13 — Suggerimento video correlati (YouTube API) ─────────────────────
+
+/**
+ * Suggerisce video correlati tramite YouTube Data API v3.
+ * Non blocca il flusso principale: viene chiamata in modo fire-and-forget.
+ * @param {{ videoId: string }} videoData
+ * @param {object} settings
+ * @returns {Promise<Array>}
+ */
+async function suggestRelatedVideos(videoData, settings) {
+  if (!settings.youtubeApiKey || !videoData.videoId) return [];
+  try {
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&relatedToVideoId=${videoData.videoId}&type=video&maxResults=3&key=${settings.youtubeApiKey}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (!data.items?.length) return [];
+    return data.items.map(item => ({
+      videoId:   item.id.videoId,
+      title:     item.snippet.title,
+      channel:   item.snippet.channelTitle,
+      url:       `https://www.youtube.com/watch?v=${item.id.videoId}`,
+      thumbnail: item.snippet.thumbnails?.default?.url || '',
+    }));
+  } catch { return []; }
+}
+
+// ── Feature #9 — Confronto video ─────────────────────────────────────────────────
+
+/**
+ * Confronta due summary tramite AI e ritorna un documento di confronto MDX.
+ * @param {string} idA - id del primo summary
+ * @param {string} idB - id del secondo summary
+ * @returns {Promise<{ success: boolean, markdown: string }>}
+ */
+async function compareVideos(idA, idB) {
+  const summaries = await Storage.getSummaries();
+  const sA = summaries.find(s => s.id === idA);
+  const sB = summaries.find(s => s.id === idB);
+  if (!sA || !sB) throw new Error('Uno o entrambi i summary non trovati.');
+  const settings = await Storage.getSettings();
+  AIProvider.requireApiKey(settings);
+  const markdown = await AIProvider.compareVideos(
+    sA.fullMarkdown || sA.markdown || '',
+    sB.fullMarkdown || sB.markdown || '',
+    sA.title || idA,
+    sB.title || idB,
+    settings
+  );
+  return { success: true, markdown };
+}
+
 chrome.runtime.onInstalled.addListener(details => {
   ensureContextMenus().catch(() => {});
   if (details.reason === 'install') chrome.tabs.create({ url: chrome.runtime.getURL('options/options.html') });
@@ -2300,3 +2734,41 @@ chrome.runtime.onInstalled.addListener(details => {
 chrome.runtime.onStartup.addListener(() => {
   ensureContextMenus().catch(() => {});
 });
+
+async function handleGenerateLearningPath(goal) {
+  const settings = await Storage.getSettings();
+  if (settings.provider !== 'gemini' || !settings.geminiApiKey) {
+    throw new Error('Questa funzione richiede Gemini come provider attivo.');
+  }
+
+  // Raccogli tutti i video estratti e in coda
+  const summaries = await Storage.getSummaries();
+  const queue = await Storage.getQueue();
+
+  const allVideos = [];
+  
+  // Dai priorità ai video già estratti
+  summaries.forEach(s => {
+    allVideos.push({
+      id: s.id,
+      title: s.title || 'Senza titolo',
+      channel: s.channelName || 'Sconosciuto'
+    });
+  });
+
+  // Aggiungi quelli in coda (se non già presenti)
+  const existingIds = new Set(summaries.map(s => s.videoId));
+  queue.forEach(q => {
+    if (!existingIds.has(q.videoId)) {
+      allVideos.push({
+        id: q.videoId,
+        title: q.title || 'Senza titolo',
+        channel: q.channelName || 'Sconosciuto'
+      });
+      existingIds.add(q.videoId);
+    }
+  });
+
+  const path = await GeminiAPI.generateLearningPath(goal, allVideos, settings.geminiApiKey, settings.model);
+  return { success: true, path };
+}

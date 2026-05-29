@@ -1,9 +1,24 @@
 // utils/storage.js — Gestione centralizzata chrome.storage
 // Creators in storage.local, settings in storage.sync
+// Aggiornato a v2.4.0 con feature #4 (Learning Paths), #5 (Ricerca ranked), #14 (Test Pre/Post)
 
 const Storage = {
   _initPromise: null,
   SETTINGS_BACKUP_KEY: 'settingsBackup',
+  SECRET_KEYS: ['geminiApiKey', 'openaiApiKey', 'youtubeApiKey'],
+
+  _stripSecrets(settings) {
+    const copy = { ...settings };
+    for (const k of this.SECRET_KEYS) delete copy[k];
+    return copy;
+  },
+
+  _mergeSecrets(target, source) {
+    for (const k of this.SECRET_KEYS) {
+      if (source && source[k]) target[k] = source[k];
+    }
+    return target;
+  },
 
   async ensureInitialized() {
     if (!this._initPromise) {
@@ -39,11 +54,14 @@ const Storage = {
     let resolved = syncSettings;
     if (!syncMeaningful && localMeaningful) {
       resolved = localSettings;
-      await chrome.storage.sync.set(resolved);
+      await chrome.storage.sync.set(this._stripSecrets(resolved));
     } else if (syncMeaningful && localMeaningful && localSettings.settingsUpdatedAt > syncSettings.settingsUpdatedAt) {
       resolved = localSettings;
-      await chrome.storage.sync.set(resolved);
+      await chrome.storage.sync.set(this._stripSecrets(resolved));
     }
+
+    // I segreti (API key) vivono solo in storage.local: ripristinali dal backup locale.
+    this._mergeSecrets(resolved, localSettings);
 
     await chrome.storage.local.set({ [this.SETTINGS_BACKUP_KEY]: resolved });
     return resolved;
@@ -56,7 +74,7 @@ const Storage = {
       settingsUpdatedAt: Date.now(),
     });
     await Promise.all([
-      chrome.storage.sync.set(normalized),
+      chrome.storage.sync.set(this._stripSecrets(normalized)),
       chrome.storage.local.set({ [this.SETTINGS_BACKUP_KEY]: normalized }),
     ]);
   },
@@ -278,6 +296,218 @@ const Storage = {
     stats.byMonth[monthKey] = (stats.byMonth[monthKey] || 0) + 1;
     await chrome.storage.local.set({ stats });
     await this.backupAppState();
+  },
+
+  // ── FEATURE #5 — Ricerca Semantica con Ranking ────────────────────────────────
+
+  /**
+   * Ricerca nei summary con ranking per rilevanza (keyword avanzato).
+   * Restituisce i summary ordinati per score decrescente.
+   * @param {string} query
+   * @returns {Promise<Array>}
+   */
+  async searchSummariesRanked(query) {
+    const summaries = await this.getSummaries();
+    if (!query) return summaries;
+    const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+    return summaries
+      .map(s => {
+        let score = 0;
+        const text = [s.title, s.channelName, ...(s.tags || []), s.markdown].join(' ').toLowerCase();
+        terms.forEach(term => {
+          if (s.title?.toLowerCase().includes(term)) score += 10;
+          if (s.tags?.some(t => t.toLowerCase().includes(term))) score += 5;
+          if (s.channelName?.toLowerCase().includes(term)) score += 3;
+          const occurrences = (text.match(new RegExp(term, 'gi')) || []).length;
+          score += Math.min(occurrences, 20);
+        });
+        return { ...s, _score: score };
+      })
+      .filter(s => s._score > 0)
+      .sort((a, b) => b._score - a._score);
+  },
+
+  // ── FEATURE #4 — Learning Paths ───────────────────────────────────────────────
+
+  /**
+   * Ritorna tutti i percorsi di apprendimento salvati.
+   * @returns {Promise<Array<{ id, name, summaryIds, createdAt, description }>>}
+   */
+  async getLearningPaths() {
+    const { learningPaths = [] } = await chrome.storage.local.get('learningPaths');
+    return learningPaths;
+  },
+
+  /**
+   * Salva un percorso di apprendimento (crea o aggiorna per id).
+   * @param {{ id?: string, name: string, summaryIds?: string[], description?: string }} path
+   * @returns {Promise<object>} il percorso salvato
+   */
+  async saveLearningPath(path) {
+    const paths = await this.getLearningPaths();
+    const id = path.id || `lp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const existing = paths.findIndex(p => p.id === id);
+    const entry = {
+      id,
+      name:       path.name || 'Percorso senza nome',
+      summaryIds: path.summaryIds || [],
+      description: path.description || '',
+      createdAt:  path.createdAt || Date.now(),
+      updatedAt:  Date.now(),
+    };
+    if (existing !== -1) paths[existing] = entry;
+    else paths.push(entry);
+    await chrome.storage.local.set({ learningPaths: paths });
+    return entry;
+  },
+
+  /**
+   * Elimina un percorso di apprendimento per id.
+   * @param {string} id
+   */
+  async deleteLearningPath(id) {
+    const paths = await this.getLearningPaths();
+    await chrome.storage.local.set({ learningPaths: paths.filter(p => p.id !== id) });
+  },
+
+  /**
+   * Aggiunge un summary a un percorso di apprendimento esistente.
+   * @param {string} pathId
+   * @param {string} summaryId
+   */
+  async addToLearningPath(pathId, summaryId) {
+    const paths = await this.getLearningPaths();
+    const idx = paths.findIndex(p => p.id === pathId);
+    if (idx === -1) throw new Error('Percorso non trovato');
+    if (!paths[idx].summaryIds.includes(summaryId)) {
+      paths[idx].summaryIds.push(summaryId);
+      paths[idx].updatedAt = Date.now();
+    }
+    await chrome.storage.local.set({ learningPaths: paths });
+    return paths[idx];
+  },
+
+  // ── FEATURE #14 — Test Pre/Post ───────────────────────────────────────────────
+
+  /**
+   * Salva le risposte al pre-test per un summary.
+   * @param {string} summaryId
+   * @param {object} answers - { [questionId]: selectedOption }
+   */
+  async savePreTest(summaryId, answers) {
+    const { preTests = {} } = await chrome.storage.local.get('preTests');
+    preTests[summaryId] = { answers, savedAt: Date.now() };
+    await chrome.storage.local.set({ preTests });
+  },
+
+  /**
+   * Ritorna le risposte al pre-test per un summary.
+   * @param {string} summaryId
+   * @returns {Promise<object|null>}
+   */
+  async getPreTest(summaryId) {
+    const { preTests = {} } = await chrome.storage.local.get('preTests');
+    return preTests[summaryId] || null;
+  },
+
+  /**
+   * Salva le risposte al post-test per un summary.
+   * @param {string} summaryId
+   * @param {object} answers - { [questionId]: selectedOption }
+   */
+  async savePostTest(summaryId, answers) {
+    const { postTests = {} } = await chrome.storage.local.get('postTests');
+    postTests[summaryId] = { answers, savedAt: Date.now() };
+    await chrome.storage.local.set({ postTests });
+  },
+
+  /**
+   * Confronta pre-test e post-test e ritorna il delta di miglioramento.
+   * Richiede che le risposte siano nel formato { [questionId]: selectedOption }.
+   * Il confronto avviene sulle domande con la chiave `correct` nelle opzioni.
+   * @param {string} summaryId
+   * @returns {Promise<{ improved: string[], regressed: string[], delta: number }>}
+   */
+  async getTestDelta(summaryId) {
+    const [preData, { postTests = {} }] = await Promise.all([
+      this.getPreTest(summaryId),
+      chrome.storage.local.get('postTests'),
+    ]);
+    const postData = postTests[summaryId] || null;
+    if (!preData || !postData) return { improved: [], regressed: [], delta: 0 };
+
+    const pre  = preData.answers  || {};
+    const post = postData.answers || {};
+    const allIds = new Set([...Object.keys(pre), ...Object.keys(post)]);
+    const improved   = [];
+    const regressed  = [];
+
+    for (const qId of allIds) {
+      // Le risposte sono coppie { selected, correct }
+      const preCorrect  = pre[qId]?.selected  === pre[qId]?.correct;
+      const postCorrect = post[qId]?.selected === post[qId]?.correct;
+      if (!preCorrect && postCorrect) improved.push(qId);
+      if (preCorrect && !postCorrect) regressed.push(qId);
+    }
+
+    const delta = improved.length - regressed.length;
+    return { improved, regressed, delta };
+  },
+
+  // ── FEATURE #4 — Visual Notes (Screenshot) ───────────────────────────────────
+
+  _openFramesDb() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open('lh-frames', 1);
+      req.onupgradeneeded = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('frames')) {
+          db.createObjectStore('frames', { keyPath: 'id', autoIncrement: true });
+        }
+      };
+      req.onsuccess = e => resolve(e.target.result);
+      req.onerror = e => reject(e.target.error);
+    });
+  },
+
+  async saveVideoFrame(videoId, timestampStr, base64Data) {
+    const db = await this._openFramesDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('frames', 'readwrite');
+      tx.objectStore('frames').add({ videoId, timestampStr, base64Data, createdAt: Date.now() });
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = e => reject(e.target.error);
+    });
+  },
+
+  async getVideoFrames(videoId) {
+    const db = await this._openFramesDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('frames', 'readonly');
+      const req = tx.objectStore('frames').getAll();
+      req.onsuccess = e => {
+        const all = e.target.result || [];
+        resolve(all.filter(f => f.videoId === videoId).sort((a, b) => a.createdAt - b.createdAt));
+      };
+      req.onerror = e => reject(e.target.error);
+    });
+  },
+
+  async deleteVideoFrames(videoId) {
+    const db = await this._openFramesDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('frames', 'readwrite');
+      const store = tx.objectStore('frames');
+      const req = store.getAll();
+      req.onsuccess = e => {
+        const all = e.target.result || [];
+        all.forEach(f => {
+          if (f.videoId === videoId) store.delete(f.id);
+        });
+        resolve(true);
+      };
+      req.onerror = e => reject(e.target.error);
+    });
   },
 };
 

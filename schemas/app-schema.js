@@ -1,7 +1,41 @@
 // schemas/app-schema.js — Schema condiviso applicazione e normalizzazione entita
 
 const AppSchema = {
-  VERSION: 5,
+  VERSION: 6,
+
+  MDX_SECTION_CATALOG: [
+    { key: 'verbatimTranscript', label: '📝 Trascrizione integrale', mode: 'verbatim' },
+    { key: 'studyGuide', label: '🎓 Studio guidato', mode: 'study' },
+    { key: 'antigravityInstructions', label: '🤖 Istruzioni Google Antigravity', mode: 'study' },
+    { key: 'antigravityPrompt', label: '🧩 Prompt Antigravity pronto all’uso', mode: 'study' },
+    { key: 'quickSummary', label: '⚡ Sintesi rapida', mode: 'summary' },
+    { key: 'conceptMap', label: '🗺️ Mappa concettuale', mode: 'assets' },
+    { key: 'flashcards', label: '🃏 Flashcard', mode: 'assets' },
+    { key: 'finalQuiz', label: '❓ Quiz finale', mode: 'assets' },
+    { key: 'interactiveTimeline', label: '⏱️ Timeline interattiva', mode: 'assets' },
+    { key: 'executionChecklist', label: '✅ Checklist esecuzione', mode: 'assets' },
+    { key: 'operationalGlossary', label: '📚 Glossario operativo', mode: 'assets' },
+    { key: 'errorsRecovery', label: '🛠️ Errori frequenti e recovery', mode: 'assets' },
+    { key: 'tutorialReplication', label: '♻️ Replicazione del tutorial', mode: 'assets' },
+    { key: 'personalNotes', label: '🗒️ Appunti personali', mode: 'notes' },
+  ],
+
+  DEFAULT_MDX_SECTIONS: {
+    verbatimTranscript: true,
+    studyGuide: true,
+    antigravityInstructions: true,
+    antigravityPrompt: true,
+    quickSummary: true,
+    conceptMap: true,
+    flashcards: true,
+    finalQuiz: true,
+    interactiveTimeline: true,
+    executionChecklist: true,
+    operationalGlossary: true,
+    errorsRecovery: true,
+    tutorialReplication: true,
+    personalNotes: true,
+  },
 
   DEFAULT_SETTINGS: {
     provider: 'gemini',
@@ -19,8 +53,21 @@ const AppSchema = {
     autoQueueInterval: '12',
     defaultLearningMode: 'study',
     outputFormat: 'mdx',
-      settingsSchemaVersion: 5,
+    userTopics: '',
+    autoExtractHighRelevance: false,
+    mdxSections: null,
+    onboardingCompleted: false,
+    archiveStrategy: 'author-first',
+    settingsSchemaVersion: 7,
     settingsUpdatedAt: 0,
+    
+    // Cloud Sync (Notion / GitHub)
+    cloudSyncMode: 'none', // 'none', 'notion', 'github', 'both'
+    notionToken: '',
+    notionDbId: '',
+    githubToken: '',
+    githubOwner: '',
+    githubRepo: '',
   },
 
   DEFAULT_STATS: {
@@ -45,8 +92,20 @@ const AppSchema = {
     return Array.isArray(value) ? value : [];
   },
 
+  normalizeObject(value, fallback = {}) {
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : fallback;
+  },
+
   uniqueStrings(values) {
     return [...new Set(this.normalizeArray(values).filter(Boolean).map(v => String(v).trim()).filter(Boolean))];
+  },
+
+  normalizeMdxSections(value = {}) {
+    const source = this.normalizeObject(value, {});
+    return Object.keys(this.DEFAULT_MDX_SECTIONS).reduce((acc, key) => {
+      acc[key] = this.normalizeBoolean(source[key], this.DEFAULT_MDX_SECTIONS[key]);
+      return acc;
+    }, {});
   },
 
   normalizeSettings(settings = {}) {
@@ -60,12 +119,19 @@ const AppSchema = {
       defaultLearningMode: ['verbatim', 'study', 'summary'].includes(settings.defaultLearningMode)
         ? settings.defaultLearningMode
         : this.DEFAULT_SETTINGS.defaultLearningMode,
-      outputFormat: settings.outputFormat === 'md' ? 'md' : 'mdx',
+      outputFormat: 'mdx',
+      mdxSections: this.normalizeMdxSections(settings.mdxSections),
       openaiModel: this.normalizeString(settings.openaiModel, this.DEFAULT_SETTINGS.openaiModel),
       useFileSystemApi: this.normalizeBoolean(settings.useFileSystemApi, false),
+      userTopics: this.normalizeString(settings.userTopics, ''),
+      autoExtractHighRelevance: this.normalizeBoolean(settings.autoExtractHighRelevance, false),
       autoQueueInterval: ['off', '6', '12', '24'].includes(String(settings.autoQueueInterval))
         ? String(settings.autoQueueInterval)
         : this.DEFAULT_SETTINGS.autoQueueInterval,
+      onboardingCompleted: this.normalizeBoolean(settings.onboardingCompleted, false),
+      archiveStrategy: ['author-first', 'chronological', 'flat'].includes(settings.archiveStrategy)
+        ? settings.archiveStrategy
+        : this.DEFAULT_SETTINGS.archiveStrategy,
       settingsUpdatedAt: this.normalizeNumber(settings.settingsUpdatedAt, 0),
       settingsSchemaVersion: this.VERSION,
     };

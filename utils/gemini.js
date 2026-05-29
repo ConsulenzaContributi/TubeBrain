@@ -70,9 +70,9 @@ const GeminiAPI = {
       ],
     };
 
-    const res = await fetch(`${this.endpoint(model)}?key=${apiKey}`, {
+    const res = await fetch(this.endpoint(model), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify(body),
     });
 
@@ -190,6 +190,19 @@ Genera ESATTAMENTE questo documento Markdown, compilando ogni sezione in modo de
 
 ---
 
+## 🗺️ Mappa Mentale / Architettura (Mermaid)
+
+[Crea una mappa concettuale o un diagramma di architettura visivo usando la sintassi \`mermaid\`. Se il video descrive un sistema, disegna il diagramma architetturale (graph TD/LR). Se descrive concetti teorici, disegna una mappa mentale logica. Non usare sintassi incompatibili, usa solo nodi e frecce semplici.]
+
+\`\`\`mermaid
+graph TD
+    %% Sostituisci questo blocco con il tuo codice Mermaid generato
+    A[Concetto Chiave] --> B(Dettaglio 1)
+    A --> C(Dettaglio 2)
+\`\`\`
+
+---
+
 ## 🎯 Prerequisiti
 
 [Lista puntata di TUTTO ciò che l'utente deve sapere, avere installato, o aver fatto prima di seguire questo tutorial. Se non ci sono prerequisiti espliciti, deducili dal contenuto.]
@@ -271,10 +284,16 @@ Genera ESATTAMENTE questo documento Markdown, compilando ogni sezione in modo de
 
 ---
 
-## 💻 Raccolta Completa Comandi e Codice
+## 💻 Code Snippet Repository
 
-[Raccogli TUTTO il codice e tutti i comandi emersi nel video, organizzato per tipo o linguaggio.
- Ogni blocco DEVE avere il tag linguaggio e una breve spiegazione di cosa fa.]
+[Raccogli tutto il codice sorgente mostrato o spiegato nel video, e organizzalo come file separati pronti per essere salvati. Per ogni file individuato o deducibile, devi usare ESATTAMENTE questo formato:]
+
+### File: [percorso/del/file.estensione]
+\`\`\`[linguaggio]
+[codice completo per questo file]
+\`\`\`
+
+[Ripeti per tutti i file. Includi le estensioni corrette (.js, .py, .css, .html). Se il video non specifica il nome del file, inventane uno logico (es. main.py, style.css). Questo passaggio è critico perché il plugin estrarrà questi blocchi per creare i file reali sul disco dell'utente.]
 
 ---
 
@@ -298,6 +317,25 @@ Genera ESATTAMENTE questo documento Markdown, compilando ogni sezione in modo de
 
 [Includi almeno 3 problemi per video tecnici. Se il video non ne menziona esplicitamente,
  aggiungi i più comuni per quel tipo di setup/linguaggio/tool.]
+
+---
+
+## 🃏 Flashcards (Anki)
+
+[Estrai 10 concetti chiave affrontati nel video per favorire lo studio attivo tramite Spaced Repetition. Usa ESATTAMENTE il seguente formato CSV per ogni flashcard, per permettere l'esportazione automatica in Anki.]
+
+\`\`\`csv
+Q: [Domanda breve e chiara]; A: [Risposta concisa]
+Q: [Domanda 2]; A: [Risposta 2]
+\`\`\`
+
+---
+
+## 🔗 Fonti Ufficiali (Documentazione)
+
+[Identifica le 3-5 tecnologie, linguaggi, librerie o concetti principali citati nel video. Per ciascuna di esse, fornisci il **link esatto alla documentazione ufficiale** pertinente (es. se nel video si parla di \`useEffect\` in React, metti il link a react.dev). Questo arricchirà gli appunti fornendo fonti sicure e aggiornate.]
+
+- **[Nome Tecnologia/Concetto]**: [Breve spiegazione del perché è rilevante] - [URL Ufficiale]
 
 ---
 
@@ -359,85 +397,44 @@ Genera ESATTAMENTE questo documento Markdown, compilando ogni sezione in modo de
 
 ---
 
-## 🤖 Workflow Antigravity — Istruzioni per Agente AI
+## 🤖 Antigravity IDE & AI Agents Workflow
 
-> Queste istruzioni sono progettate per essere incollate direttamente in **Google Antigravity** (antigravity.google) come prompt di un agente automatico che replica i passaggi del video.
+[QUESTA SEZIONE È FONDAMENTALE. Estrai l'intera sequenza operativa del video e trasformala in un PROMPT STRUTTURATO copia-incolla che l'utente può fornire a un agente AI autonomo (come Google Antigravity, Cursor, o Copilot Workspace) per far fargli eseguire il tutorial in autonomia.]
 
-### 📋 Prompt Principale per l'Agente
+**Istruzioni per l'utente:**
+> Incolla il blocco sottostante al tuo AI Agent per fargli ricreare il progetto del video senza alcun tuo intervento.
 
-\`\`\`
-Sei un agente AI che deve replicare esattamente i passaggi descritti in questo workflow.
-Titolo workflow: [titolo descrittivo basato sul video]
-Obiettivo finale: [descrivi in una frase cosa produce il workflow completato]
+\`\`\`markdown
+Sei un AI Coding Agent autonomo. Il tuo compito è replicare esattamente il tutorial descritto di seguito. Esegui questi passaggi nell'ordine indicato, verificando il successo di ogni step prima di passare al successivo. Usa i tuoi tool di file system e bash per completare i task.
 
-Esegui i seguenti passi nell'ordine indicato. Per ogni passo:
-1. Leggi l'azione richiesta
-2. Usa il tool specificato
-3. Verifica che l'output sia corretto prima di procedere
-4. In caso di errore, esegui il passo di fallback indicato
-\`\`\`
+### Contesto del Progetto
+- **Obiettivo:** [Sintetizza l'obiettivo finale del progetto]
+- **Stack Tecnologico:** [Linguaggi, framework, librerie e versioni esatte]
+- **Struttura Directory Attesa:** [Albero delle directory principale]
 
-### ⚙️ Definizione Steps del Workflow
+### Task Sequenziali
 
-\`\`\`yaml
-workflow:
-  name: "[nome workflow derivato dal titolo video]"
-  description: "[obiettivo in 1-2 frasi]"
-  trigger: "manuale"  # o: "schedulato", "evento", "webhook"
+**Fase 1: Setup e Dipendenze**
+- [ ] Crea i file di configurazione necessari (es. package.json, requirements.txt, ecc.) con i seguenti contenuti:
+  \`[Inserisci gli snippet di config esatti]\`
+- [ ] Esegui i seguenti comandi nel terminale per preparare l'ambiente: \`[lista comandi setup]\`
 
-  inputs:
-    # Lista degli input iniziali richiesti dall'utente
-    - name: "[nome_input]"
-      type: "[text|url|file|number]"
-      description: "[cosa rappresenta]"
-      required: true
+**Fase 2: Implementazione Core**
+[Dividi il codice del video in Task specifici e progressivi]
+- [ ] Task 2.1: Crea il file \`[percorso_file]\` scrivendo la logica per [cosa deve fare].
+  \`\`\`[linguaggio]
+  [Codice esatto mostrato nel video]
+  \`\`\`
+- [ ] Task 2.2: Aggiorna il file \`[percorso_file]\` per [motivo dell'update]. Aggiungi questa logica:
+  \`\`\`[linguaggio]
+  [Codice esatto mostrato nel video]
+  \`\`\`
+[... ripeti per ogni file o blocco logico del video ...]
 
-  steps:
-    - id: step_1
-      name: "[nome azione 1]"
-      tool: "[nome tool/servizio da usare]"
-      action: "[verbo + oggetto: es. 'Apri il file X', 'Chiama API Y', 'Scrivi testo Z']"
-      input: "[dato o variabile di input]"
-      expected_output: "[descrizione dell'output corretto]"
-      on_error: "[cosa fare se fallisce]"
-      notes: "[eventuali note tecniche dal video]"
-
-    - id: step_2
-      name: "[nome azione 2]"
-      tool: "[tool]"
-      action: "[azione]"
-      input: "{{step_1.output}}"  # usa output del passo precedente
-      expected_output: "[output atteso]"
-      on_error: "[fallback]"
-
-    # [Ripeti per ogni passo del video — minimo 5, massimo tutti i passi identificabili]
-
-  output:
-    type: "[file|url|testo|dati]"
-    description: "[cosa produce il workflow alla fine]"
-    destination: "[dove salvare/inviare il risultato]"
-\`\`\`
-
-### 🔗 Integrazioni e Tool Richiesti
-
-[Lista dei tool/servizi necessari per eseguire questo workflow in Antigravity, con note su come configurarli]
-
-| Tool | Scopo nel Workflow | Note Configurazione |
-|------|-------------------|---------------------|
-| ... | ... | ... |
-
-### ⚡ Prompt di Esecuzione Rapida
-
-[Scrivi UN SOLO prompt completo, pronto da incollare in Antigravity, che descrive l'intero workflow in linguaggio naturale. Deve essere abbastanza dettagliato da permettere all'agente di eseguire tutto autonomamente.]
-
-\`\`\`
-[PROMPT ANTIGRAVITY — incolla questo testo direttamente nell'agente]
-
-Voglio che tu esegua il seguente workflow passo per passo:
-
-[descrizione completa del workflow in linguaggio naturale, con tutti i passaggi, gli strumenti, gli input e gli output attesi, derivata dalla trascrizione del video]
-
-Al termine, conferma ogni step completato e mostra il risultato finale.
+**Fase 3: Avvio e Verifica**
+- [ ] Avvia l'ambiente locale usando il comando nel terminale: \`[comando start]\`
+- [ ] Verifica che il sistema funzioni controllando [cosa deve apparire/succedere].
+- [ ] Fallback/Troubleshooting: Se riscontri l'errore [errore tipico del video], esegui [comando o fix risolutivo].
 \`\`\`
 
 ---
@@ -451,7 +448,39 @@ Sezione Diff Prima/Dopo: includila solo se il video mostra effettive modifiche a
 Sezione Quick Run: deve essere eseguibile copiando e incollando, con placeholder chiari.`;
   },
 
-  buildLearningSectionsPrompt(videoData, language = 'it') {
+  getDefaultMdxSections() {
+    return (typeof AppSchema !== 'undefined' && AppSchema.DEFAULT_MDX_SECTIONS)
+      ? { ...AppSchema.DEFAULT_MDX_SECTIONS }
+      : {
+          verbatimTranscript: true,
+          studyGuide: true,
+          antigravityInstructions: true,
+          antigravityPrompt: true,
+          quickSummary: true,
+          conceptMap: true,
+          flashcards: true,
+          finalQuiz: true,
+          interactiveTimeline: true,
+          executionChecklist: true,
+          operationalGlossary: true,
+          errorsRecovery: true,
+          tutorialReplication: true,
+          personalNotes: true,
+        };
+  },
+
+  resolveMdxSections(settings = {}) {
+    const defaults = this.getDefaultMdxSections();
+    const source = settings?.mdxSections && typeof settings.mdxSections === 'object'
+      ? settings.mdxSections
+      : {};
+    return Object.keys(defaults).reduce((acc, key) => {
+      acc[key] = typeof source[key] === 'boolean' ? source[key] : defaults[key];
+      return acc;
+    }, {});
+  },
+
+  buildLearningSectionsPrompt(videoData, language = 'it', settings = {}) {
     const langInstruction = language === 'auto'
       ? 'Rispondi nella stessa lingua in cui e parlato il video.'
       : language === 'en'
@@ -468,6 +497,103 @@ Sezione Quick Run: deve essere eseguibile copiando e incollando, con placeholder
     const studyDepth = videoData.durationBucket === 'marathon' || videoData.durationBucket === 'deep'
       ? 'Alta granularita: usa sottocapitoli, recap intermedi, milestone e checkpoints pratici.'
       : 'Granularita standard: mantieni capitoli compatti ma operativi.';
+    const mdxSections = this.resolveMdxSections(settings);
+    const includeStudyMode = mdxSections.studyGuide;
+    const includeSummaryMode = mdxSections.quickSummary;
+    const optionalSections = [];
+
+    if (mdxSections.conceptMap) {
+      optionalSections.push(`## Mappa concettuale
+
+- usa un blocco \`\`\`mermaid
+- crea una mappa leggibile e compatta
+- nodo centrale = tema del video
+- rami = capitoli principali
+- sotto-rami = concetti, strumenti, output, errori da evitare`);
+    }
+    if (mdxSections.flashcards) {
+      optionalSections.push(`## Flashcard
+
+- crea 8-15 flashcard
+- formato tabella Markdown con colonne: \`Domanda | Risposta | Difficolta\`
+- le domande devono coprire concetti, passaggi e decisioni tecniche`);
+    }
+    if (mdxSections.finalQuiz) {
+      optionalSections.push(`## Quiz finale
+
+- crea 8 domande a risposta multipla
+- 4 opzioni per domanda
+- indica la risposta corretta
+- aggiungi una spiegazione breve`);
+    }
+    if (mdxSections.interactiveTimeline) {
+      optionalSections.push(`## Timeline interattiva
+
+- crea una tabella Markdown con colonne: \`Timestamp | Focus | Azione pratica | Perche conta\`
+- usa timestamp reali del video quando disponibili
+- includi solo i passaggi che vale la pena riaprire o rivedere`);
+    }
+    if (mdxSections.executionChecklist) {
+      optionalSections.push(`## Checklist esecuzione
+
+- crea 8-15 task in formato GFM task list: \`- [ ] azione\`
+- ogni task deve essere atomico, verificabile e direttamente eseguibile
+- evita task vaghi come "studia meglio" o "capisci il concetto"`);
+    }
+    if (mdxSections.operationalGlossary) {
+      optionalSections.push(`## Glossario operativo
+
+- crea una tabella Markdown con colonne: \`Termine | Definizione | Perche conta\`
+- includi concetti tecnici, file, strumenti, pattern e nomi API ricorrenti
+- ogni definizione deve stare in 1-2 frasi dense`);
+    }
+    if (mdxSections.errorsRecovery) {
+      optionalSections.push(`## Errori frequenti e recovery
+
+- elenca gli errori operativi piu probabili emersi dal tutorial
+- per ogni errore indica sintomo, causa, fix e controllo finale`);
+    }
+    if (mdxSections.tutorialReplication) {
+      optionalSections.push(`## Replicazione del tutorial
+
+- 5-10 punti pratici su come replicare contenuto, struttura, workflow e logica del tutorial`);
+    }
+
+    const studyHeadingBlock = mdxSections.antigravityInstructions
+      ? `Formato richiesto per ogni capitolo:
+### [Titolo capitolo]
+#### Cosa impari
+#### Passaggi operativi
+#### Checklist studio
+#### Errori da evitare
+#### Segnali di completamento
+#### Istruzioni Google Antigravity
+
+Nella sottosezione "Istruzioni Google Antigravity" inserisci:
+- obiettivo del task
+- input richiesti
+- sequenza di azioni
+- output atteso
+- controlli di verifica`
+      : `Formato richiesto per ogni capitolo:
+### [Titolo capitolo]
+#### Cosa impari
+#### Passaggi operativi
+#### Checklist studio
+#### Errori da evitare
+#### Segnali di completamento`;
+
+    const studyPromptBlock = mdxSections.antigravityPrompt
+      ? `Dopo i capitoli aggiungi:
+### Prompt Antigravity pronto all'uso
+con un blocco \`\`\`text`
+      : '';
+
+    const activeSectionOrder = [
+      includeStudyMode ? 'Studio guidato' : null,
+      includeSummaryMode ? 'Sintesi rapida' : null,
+      ...optionalSections.map(section => section.match(/^##\s+(.+)$/m)?.[1] || null),
+    ].filter(Boolean).join(' → ');
 
     return `Sei un learning designer specializzato in tutorial tecnici. ${langInstruction}
 
@@ -494,32 +620,19 @@ ${videoData.transcript}
 ═══════════════════════════════════════
 ISTRUZIONI DI OUTPUT
 ═══════════════════════════════════════
-Genera ESATTAMENTE queste sezioni in Markdown/MDX:
+Genera SOLO le sezioni attive richieste qui sotto, in Markdown/MDX.
+Non aggiungere sezioni extra.
 
-## <a id="mode-study"></a>2. Studio guidato
+${includeStudyMode ? `## <a id="mode-study"></a>2. Studio guidato
 
 Per ogni capitolo e sottocapitolo:
 - mantieni il titolo del capitolo originale o quello piu fedele possibile
 - spiega cosa succede
 - estrai passaggi operativi replicabili
 - aggiungi una mini checklist studio
-- aggiungi una sottosezione separata con istruzioni operative per Google Antigravity
+${mdxSections.antigravityInstructions ? '- aggiungi una sottosezione separata con istruzioni operative per Google Antigravity' : ''}
 
-Formato richiesto per ogni capitolo:
-### [Titolo capitolo]
-#### Cosa impari
-#### Passaggi operativi
-#### Checklist studio
-#### Errori da evitare
-#### Segnali di completamento
-#### Istruzioni Google Antigravity
-
-Nella sottosezione "Istruzioni Google Antigravity" inserisci:
-- obiettivo del task
-- input richiesti
-- sequenza di azioni
-- output atteso
-- controlli di verifica
+${studyHeadingBlock}
 
 Regole aggiuntive per la sezione Studio guidato:
 - ${studyDepth}
@@ -527,67 +640,24 @@ Regole aggiuntive per la sezione Studio guidato:
 - Se il video e tecnico, includi comandi, file, path e snippet essenziali
 - Se il transcript e di qualita bassa, dichiara le assunzioni solo quando necessario
 
-Dopo i capitoli aggiungi:
-### Prompt Antigravity pronto all'uso
-con un blocco \`\`\`text
+${studyPromptBlock}` : ''}
 
-Poi genera:
-
-## <a id="mode-summary"></a>3. Sintesi rapida
+${includeSummaryMode ? `## <a id="mode-summary"></a>3. Sintesi rapida
 
 Per ogni capitolo:
 - massimo 500 caratteri per capitolo
 - mantieni capitoli e sottocapitoli
-- tono denso, utile per ripasso e memorizzazione
+- tono denso, utile per ripasso e memorizzazione` : ''}
 
-Poi genera:
-
-## Mappa concettuale
-
-- usa un blocco \`\`\`mermaid
-- crea una mappa leggibile e compatta
-- nodo centrale = tema del video
-- rami = capitoli principali
-- sotto-rami = concetti, strumenti, output, errori da evitare
-
-Poi genera:
-
-## Flashcard
-
-- crea 8-15 flashcard
-- formato tabella Markdown con colonne: \`Domanda | Risposta | Difficolta\`
-- le domande devono coprire concetti, passaggi e decisioni tecniche
-
-Poi genera:
-
-## Quiz finale
-
-- crea 8 domande a risposta multipla
-- 4 opzioni per domanda
-- indica la risposta corretta
-- aggiungi una spiegazione breve
-
-Poi genera:
-
-## Errori frequenti e recovery
-
-- elenca gli errori operativi piu probabili emersi dal tutorial
-- per ogni errore indica sintomo, causa, fix e controllo finale
-
-Poi genera:
-
-## Replicazione del tutorial
-
-- 5-10 punti pratici su come replicare contenuto, struttura, workflow e logica del tutorial
+${optionalSections.join('\n\n')}
 
 Vincoli:
 - niente frontmatter
 - niente testo introduttivo extra
 - niente placeholder generici tipo "inserisci qui"
-- le istruzioni Antigravity devono essere concrete e basate davvero sulla trascrizione
+- ${mdxSections.antigravityInstructions || mdxSections.antigravityPrompt ? 'le istruzioni Antigravity devono essere concrete e basate davvero sulla trascrizione' : 'non citare Antigravity se le relative sezioni non sono attive'}
 - se il video e tecnico, riconosci comandi, codice, file e configurazioni dal parlato
-- mantieni un ordine stabile delle sezioni
-- non omettere mai \`Flashcard\`, \`Quiz finale\` ed \`Errori frequenti e recovery\``;
+- mantieni un ordine stabile delle sezioni attive: ${activeSectionOrder || 'nessuna sezione attiva'}`;
   },
 
   /**
@@ -628,22 +698,100 @@ Vincoli:
 
   async generateLearningSections(videoData, settings) {
     const { geminiApiKey, language, model } = settings;
-    const MAX_CHARS = 600000;
-    let transcript = videoData.transcript || '';
-    if (transcript.length > MAX_CHARS) {
-      const half = Math.floor(MAX_CHARS / 2);
-      transcript =
-        transcript.slice(0, half) +
-        '\n\n[... sezione centrale omessa per lunghezza ...]\n\n' +
-        transcript.slice(-half);
+    const transcript = videoData.transcript || '';
+    
+    // FASE 1: Generazione Indice (TOC)
+    const tocPrompt = `Analizza la seguente trascrizione del video e genera un Indice (Table of Contents) gerarchico.
+Individua i capitoli principali (minimo 3, massimo 15) e restituisci SOLO un array JSON con questa struttura:
+[
+  { "title": "Titolo Capitolo 1", "summary": "Di cosa parla", "start": "00:00", "end": "05:30" }
+]
+NON AGGIUNGERE ALTRO TESTO OLTRE AL JSON. Usa i timestamp che trovi nella trascrizione per intuire inizio e fine.
+
+Trascrizione:
+${transcript.substring(0, 150000)} // Limite per l'indice per risparmiare token
+`;
+    
+    let toc = [];
+    try {
+      const tocRaw = await this.call(tocPrompt, geminiApiKey, { temperature: 0.1, maxOutputTokens: 2000, model: model || this.DEFAULT_MODEL });
+      const match = tocRaw.match(/\[[\s\S]*?\]/);
+      if (match) toc = JSON.parse(match[0]);
+    } catch (e) {
+      console.warn("Errore TOC:", e);
+      // Fallback: se fallisce, facciamo un unico blocco
+      toc = [{ title: "Tutorial Completo", summary: "Tutto il video", start: "00:00", end: "99:99" }];
     }
 
-    const prompt = this.buildLearningSectionsPrompt({ ...videoData, transcript }, language);
-    return await this.call(prompt, geminiApiKey, {
-      temperature: 0.2,
-      maxOutputTokens: 16384,
-      model: model || this.DEFAULT_MODEL,
-    });
+    if (!Array.isArray(toc) || toc.length === 0) {
+      toc = [{ title: "Tutorial Completo", summary: "Tutto il video", start: "00:00", end: "99:99" }];
+    }
+
+    // FASE 2 & 3: Estrazione Granulare e Metadati Globali in Parallelo
+    const langInstruction = language === 'en' ? 'Write in English.' : 'Scrivi in Italiano.';
+    
+    const globalMetadataPrompt = `Sei un esperto tecnico. ${langInstruction}
+Genera un documento Markdown di intestazione per questo video: ${videoData.title}.
+Devi includere ESATTAMENTE queste sezioni, compilandole con cura estraendo le info dalla trascrizione:
+## 📋 Riepilogo Generale (3-4 paragrafi)
+## 🗺️ Mappa Mentale / Architettura (Usa blocco \`\`\`mermaid)
+## 🎯 Prerequisiti
+## 📦 Dipendenze e Versioni (Includi blocco codice per requirements.txt/package.json se applicabile)
+## 🛠️ Tool, Software e Risorse (Includi link fittizi o reali se deducibili)
+
+Trascrizione:
+${transcript.substring(0, 300000)} // Primo blocco
+`;
+
+    const globalPromise = this.call(globalMetadataPrompt, geminiApiKey, { temperature: 0.3, maxOutputTokens: 4000, model: model || this.DEFAULT_MODEL });
+    
+    // Chiamate sequenziali o batch per i capitoli per non superare i rate limit (max 3 in parallelo)
+    let chapterResults = [];
+    for (let i = 0; i < toc.length; i++) {
+      const chapter = toc[i];
+      // Per semplicità e sicurezza dei rate limit, passiamo al modello la trascrizione intera ma gli chiediamo di concentrarsi solo su quel capitolo
+      const chapterPrompt = `Sei un analista tecnico. ${langInstruction}
+Estrai i dettagli operativi dal seguente video, concentrandoti SOLO sul capitolo: "${chapter.title}" (da ${chapter.start} a ${chapter.end}).
+
+Usa ESATTAMENTE questo formato Markdown per la risposta:
+### ${chapter.title}
+[Riepilogo conciso del capitolo]
+
+#### 🔹 Passaggi eseguiti:
+1. [Passaggio 1]
+2. [Passaggio 2]
+
+#### 💻 Codice e Comandi:
+\`\`\`[linguaggio]
+[codice]
+\`\`\`
+
+Devi estrarre tutto il codice parlato o mostrato e scomporre il capitolo in sottoparagrafi.
+
+Trascrizione completa (ignora ciò che non fa parte del capitolo):
+${transcript.substring(0, 300000)}
+`;
+      try {
+        const res = await this.call(chapterPrompt, geminiApiKey, { temperature: 0.2, maxOutputTokens: 4000, model: model || this.DEFAULT_MODEL });
+        chapterResults.push(res);
+      } catch (e) {
+        console.warn(`Errore estrazione capitolo ${i}:`, e);
+      }
+    }
+
+    const globalMetadata = await globalPromise.catch(() => "## 📋 Riepilogo Generale\n\nErrore generazione metadati.\n\n");
+
+    // FASE 4: Assemblaggio
+    const finalMarkdown = `
+${globalMetadata}
+
+---
+
+## 📚 Capitoli e Contenuto Dettagliato (Deep Extract)
+
+${chapterResults.join('\n\n---\n\n')}
+`;
+    return finalMarkdown;
   },
 
   /**
@@ -1045,6 +1193,50 @@ ISTRUZIONI:
       return ids.filter(id => validIds.has(id));
     } catch {
       return summaries.map(s => s.id);
+    }
+  },
+
+  /**
+   * Genera un percorso di studio ordinando logicamente i video in base a un obiettivo.
+   */
+  async generateLearningPath(goal, videosList, apiKey, model) {
+    if (!videosList || videosList.length === 0) return [];
+    
+    const catalogStr = videosList.map(v => `ID: ${v.id} | Titolo: "${v.title}" | Canale: ${v.channel}`).join('\n');
+    
+    const prompt = `Sei un tutor didattico esperto.
+Il mio obiettivo di apprendimento è: "${goal}"
+
+Ecco l'elenco dei video che ho nel mio archivio/coda:
+${catalogStr}
+
+Seleziona SOLO i video pertinenti al mio obiettivo e ordinali in un percorso logico dal più basilare (Lezione 1) al più avanzato. Scarta i video irrilevanti.
+
+Rispondi ESATTAMENTE E SOLO con un array JSON in questo formato (senza formattazione markdown \`\`\`json):
+[
+  {
+    "lessonNumber": 1,
+    "title": "Titolo del video selezionato",
+    "videoId": "ID del video corrispondente",
+    "reason": "Breve motivo (1 frase) per cui questo step è necessario in questa fase"
+  },
+  ...
+]`;
+
+    try {
+      const raw = await this.call(prompt, apiKey, {
+        maxOutputTokens: 1500,
+        temperature: 0.1,
+        model: model || this.DEFAULT_MODEL,
+      });
+      
+      const match = raw.match(/\[[\s\S]*?\]/);
+      if (!match) return [];
+      
+      return JSON.parse(match[0]);
+    } catch (e) {
+      console.warn("Errore generazione learning path:", e);
+      return [];
     }
   },
 

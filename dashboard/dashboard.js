@@ -1,4 +1,4 @@
-// dashboard.js — Learning Hub Dashboard Logic v2.2.7
+// dashboard.js — Learning Hub Dashboard Logic v2.3.1
 
 const $ = id => document.getElementById(id);
 const bg = (action, data = {}) => chrome.runtime.sendMessage({ action, ...data });
@@ -138,6 +138,15 @@ function bindButtons() {
   // Semantic search
   $('btn-semantic-search')?.addEventListener('click', () => triggerSemanticSearch());
   $('btn-semantic-reset')?.addEventListener('click', () => resetSemanticSearch());
+  
+  // Screening buttons
+  $('btn-refresh-screening')?.addEventListener('click', async () => {
+    $('btn-refresh-screening').disabled = true;
+    $('btn-refresh-screening').textContent = '⏳';
+    await refreshAllCreators(); // questo in background fa checkAndQueueNewVideos
+    $('btn-refresh-screening').disabled = false;
+    $('btn-refresh-screening').textContent = '🔄 Aggiorna';
+  });
 
   // Chat buttons
   $('btn-chat-send')?.addEventListener('click', () => sendChatMessage());
@@ -182,7 +191,8 @@ function bindButtons() {
   $('modal-delete').addEventListener('click', deleteActiveSummary);
   $('modal-body').addEventListener('click', handleLearningInteractions);
   $('btn-batch-import')?.addEventListener('click', importBatchUrlsFromDashboard);
-
+  $('btn-generate-path')?.addEventListener('click', generateLearningPathUI);
+  $('btn-export-global-archive')?.addEventListener('click', () => bg('EXPORT_GLOBAL_ARCHIVE'));
   // ── Event delegation: Archivio globale ───────────────────────────────────
   $('archive-list').addEventListener('click', async e => {
     // Ignora click su link <a>
@@ -202,6 +212,18 @@ function bindButtons() {
     if (card) {
       const s = allSummaries.find(x => x.id === card.dataset.id);
       if (s) openModal(s);
+    }
+  });
+
+  // ── Event delegation: Screening globale ───────────────────────────────────
+  $('screening-list')?.addEventListener('click', async e => {
+    const btn = e.target.closest('[data-action]');
+    if (btn) {
+      e.stopPropagation();
+      const { action, id } = btn.dataset;
+      if (action === 'approve-screening') await approveScreeningItem(id, btn);
+      if (action === 'discard-screening') await deleteSummaryItem(id);
+      return;
     }
   });
 
@@ -300,7 +322,7 @@ async function loadFeed(forceRefresh = false) {
     updateWorkspaceInsights();
   } catch (e) {
     $('feed-loading').classList.add('hidden');
-    $('feed-list').innerHTML = `<p style="color:#dc3545">Errore caricamento feed: ${e.message}</p>`;
+    $('feed-list').innerHTML = `<p style="color:#dc3545">Errore caricamento feed: ${escHtml(e.message)}</p>`;
   }
 }
 
@@ -664,6 +686,72 @@ async function doRefreshStats(channelId, btn) {
   }
 }
 
+// ── Percorsi di Studio (Learning Paths) ──────────────────────────────────────
+async function generateLearningPathUI() {
+  const goalInput = $('path-goal-input');
+  const btn = $('btn-generate-path');
+  const loading = $('path-loading');
+  const results = $('path-results');
+  
+  if (!goalInput.value.trim()) return;
+  
+  btn.disabled = true;
+  loading.classList.remove('hidden');
+  results.innerHTML = '';
+  
+  try {
+    const response = await bg('GENERATE_LEARNING_PATH', { goal: goalInput.value.trim() });
+    
+    if (!response.success) {
+      throw new Error(response.error || 'Errore durante la generazione');
+    }
+    
+    const path = response.path || [];
+    
+    if (path.length === 0) {
+      results.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">🤷</div>
+          <p class="empty-title">Nessun percorso trovato</p>
+          <p class="empty-sub">Non ci sono video nel tuo archivio o in coda adatti a questo obiettivo.</p>
+        </div>
+      `;
+      return;
+    }
+    
+    // Mostra il percorso
+    path.forEach((lesson, index) => {
+      const card = document.createElement('div');
+      card.className = 'video-card archive-item';
+      card.innerHTML = `
+        <div class="video-info" style="width: 100%;">
+          <div class="video-title" style="font-size: 1.1em;">
+            <span style="color: var(--primary); font-weight: bold; margin-right: 8px;">Lezione ${index + 1}:</span>
+            ${escHtml(lesson.title)}
+          </div>
+          <div class="video-channel" style="margin-top: 8px; color: var(--text-2);">
+            <em>"${escHtml(lesson.reason)}"</em>
+          </div>
+          <div class="video-channel" style="margin-top: 4px;">
+            ID Video: ${escHtml(lesson.videoId)}
+          </div>
+        </div>
+      `;
+      results.appendChild(card);
+    });
+    
+  } catch (err) {
+    results.innerHTML = `
+      <div class="empty-state" style="border-color: var(--error);">
+        <p style="color: var(--error);">Errore: ${escHtml(err.message)}</p>
+      </div>
+    `;
+  } finally {
+    btn.disabled = false;
+    loading.classList.add('hidden');
+  }
+}
+
 async function refreshAllCreators() {
   const btn = $('btn-refresh-all-creators');
   const fb  = $('creators-actions-feedback');
@@ -1008,10 +1096,14 @@ async function loadSummaries() {
   mapRendered = false; // forza re-render mappa se summaries aggiornati
 
   const pending   = allSummaries.filter(s => s.status === 'pending').length;
-  const extracted = allSummaries.filter(s => s.status !== 'pending').length;
-  $('nav-archive-count').textContent = allSummaries.length;
+  const screened  = allSummaries.filter(s => s.status === 'screened').length;
+  const extracted = allSummaries.filter(s => s.status !== 'pending' && s.status !== 'screened').length;
+  $('nav-archive-count').textContent = allSummaries.filter(s => s.status !== 'screened').length;
   const pendingBadge = $('nav-pending-count');
   if (pendingBadge) { pendingBadge.textContent = pending; pendingBadge.classList.toggle('hidden', pending === 0); }
+  
+  const screeningBadge = $('nav-screening-badge');
+  if (screeningBadge) { screeningBadge.textContent = screened; screeningBadge.classList.toggle('hidden', screened === 0); }
 
   // Aggiorna contatore note per chat
   const extractedCount = allSummaries.filter(s => s.status === 'extracted' && s.markdown).length;
@@ -1019,7 +1111,8 @@ async function loadSummaries() {
   if (chatCount) { chatCount.textContent = extractedCount || ''; chatCount.title = `${extractedCount} note nell'archivio`; }
   updateChatNoteCount(extractedCount);
 
-  renderArchive(allSummaries);
+  renderArchive(allSummaries.filter(s => s.status !== 'screened'));
+  renderScreening(allSummaries.filter(s => s.status === 'screened'));
 
   // Popola filtro canale
   const channels = [...new Set(allSummaries.map(s => s.channelName).filter(Boolean))];
@@ -2818,4 +2911,88 @@ function escHtml(str) {
 function debounce(fn, ms) {
   let t;
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+// ── Screening & Daily Digest ──────────────────────────────────────────────────
+
+function renderScreening(summaries) {
+  const list = $('screening-list');
+  if (!list) return;
+
+  if (summaries.length === 0) {
+    $('screening-empty').classList.remove('hidden');
+    list.innerHTML = '';
+    return;
+  }
+  $('screening-empty').classList.add('hidden');
+
+  list.innerHTML = summaries.map(s => {
+    const pitch = s.aiPitch || {};
+    const scoreClass = pitch.score >= 8 ? 'text-success' : (pitch.score >= 5 ? 'text-warning' : 'text-danger');
+    
+    return `
+      <div class="archive-item screening-card" data-id="${s.id}">
+        <div class="archive-thumb-wrap">
+          <img class="archive-thumb" src="${s.thumbnail || `https://i.ytimg.com/vi/${s.videoId}/mqdefault.jpg`}" loading="lazy">
+        </div>
+        <div class="archive-content">
+          <div class="archive-badges">
+            <span class="archive-badge badge-pending">💡 Segnalazione</span>
+            ${s.durationBucket ? `<span class="archive-badge badge-neutral">${s.durationBucket}</span>` : ''}
+            <span class="archive-badge" style="font-weight:bold;color:var(--text1)">Score: <span class="${scoreClass}">${pitch.score || '?'}</span>/10</span>
+          </div>
+          <h3 class="archive-title">${escHtml(s.title || 'Senza Titolo')}</h3>
+          <p class="archive-channel">${escHtml(s.channelName || 'Sconosciuto')}</p>
+          
+          <div style="background:var(--bg3); padding:12px; border-radius:6px; margin: 12px 0;">
+            <p style="font-size:13px; font-weight:600; color:var(--text1); margin-bottom:4px">🎯 Tema:</p>
+            <p style="font-size:13px; color:var(--text2); margin-bottom:8px">${escHtml(pitch.hook || 'N/D')}</p>
+            <p style="font-size:13px; font-weight:600; color:var(--text1); margin-bottom:4px">💡 Perché vederlo:</p>
+            <p style="font-size:13px; color:var(--text2); margin-bottom:8px">${escHtml(pitch.value || 'N/D')}</p>
+            <p style="font-size:13px; font-weight:600; color:var(--text1); margin-bottom:4px">🤔 Giudizio:</p>
+            <p style="font-size:13px; color:var(--text2);">${escHtml(pitch.reason || 'N/D')}</p>
+          </div>
+          
+          <div class="archive-actions" style="justify-content: flex-start; gap: 8px;">
+            <button class="btn btn-primary btn-sm" data-action="approve-screening" data-id="${s.id}">✨ Approva e Estrai</button>
+            <button class="btn btn-ghost btn-sm" onclick="openVideoOnYT('${s.videoId}')">▶ Guarda</button>
+            <button class="btn btn-danger btn-sm" data-action="discard-screening" data-id="${s.id}">🗑️ Scarta</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function approveScreeningItem(id, btn) {
+  const origText = btn.textContent;
+  btn.textContent = '⏳ Approvazione...';
+  btn.disabled = true;
+  try {
+    const summary = allSummaries.find(s => s.id === id);
+    if (!summary) throw new Error("Item non trovato");
+    
+    await chrome.storage.local.get(['summaries']).then(res => {
+      const arr = res.summaries || [];
+      const idx = arr.findIndex(s => s.id === id);
+      if (idx !== -1) {
+        arr[idx].status = 'pending';
+        return chrome.storage.local.set({ summaries: arr });
+      }
+    });
+    
+    summary.status = 'pending';
+    await bg('EXTRACT_PENDING_SUMMARY', { id });
+    
+    Progress.show('⚙️ Avvio estrazione', 1, 1, summary.title);
+    setTimeout(() => {
+      Progress.hide();
+      loadSummaries();
+    }, 2000);
+    
+  } catch (e) {
+    console.error("Approve error", e);
+    btn.textContent = '❌ Errore';
+    setTimeout(() => { btn.textContent = origText; btn.disabled = false; }, 2000);
+  }
 }
