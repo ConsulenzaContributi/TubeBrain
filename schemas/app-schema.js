@@ -86,6 +86,8 @@ const AppSchema = {
     settingsSchemaVersion: 7,
     settingsUpdatedAt: 0,
     
+    uiLanguage: 'it',
+
     // Cloud Sync (Notion / GitHub)
     cloudSyncMode: 'none', // 'none', 'notion', 'github', 'both'
     notionToken: '',
@@ -157,6 +159,7 @@ const AppSchema = {
       archiveStrategy: ['author-first', 'chronological', 'flat'].includes(settings.archiveStrategy)
         ? settings.archiveStrategy
         : this.DEFAULT_SETTINGS.archiveStrategy,
+      uiLanguage: ['it', 'en'].includes(settings.uiLanguage) ? settings.uiLanguage : 'it',
       settingsUpdatedAt: this.normalizeNumber(settings.settingsUpdatedAt, 0),
       settingsSchemaVersion: this.VERSION,
     };

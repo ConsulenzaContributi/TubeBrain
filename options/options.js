@@ -109,6 +109,11 @@ async function loadSettings() {
   if ($('user-topics')) $('user-topics').value = settings.userTopics || '';
   if ($('auto-extract-high-relevance')) $('auto-extract-high-relevance').checked = settings.autoExtractHighRelevance || false;
 
+  // Lingua interfaccia
+  const uiLangSelect = $('ui-language');
+  if (uiLangSelect) uiLangSelect.value = settings.uiLanguage || 'it';
+  if (typeof I18n !== 'undefined') I18n.applyI18n(document, settings.uiLanguage || 'it');
+
   applyMdxSectionSettings(settings.mdxSections || DEFAULT_MDX_SECTIONS);
 
   // Cloud Sync
@@ -240,6 +245,14 @@ function bindEvents() {
   $('btn-disable-all-sections')?.addEventListener('click', () => setAllMdxSections(false));
 
   $('cloud-sync-mode')?.addEventListener('change', updateCloudSyncUI);
+
+  // Lingua interfaccia
+  $('ui-language')?.addEventListener('change', async () => {
+    const lang = $('ui-language').value;
+    if (typeof I18n !== 'undefined') I18n.applyI18n(document, lang);
+    const { settings: currentSettings } = await bg('GET_SETTINGS');
+    await bg('SAVE_SETTINGS', { settings: { ...currentSettings, uiLanguage: lang } });
+  });
 
   // Salva
   $('btn-save').addEventListener('click', saveSettings);
@@ -477,6 +490,7 @@ async function saveSettings() {
     autoQueueInterval: autoQueueInterval,
     userTopics:        $('user-topics') ? $('user-topics').value.trim() : '',
     autoExtractHighRelevance: $('auto-extract-high-relevance') ? $('auto-extract-high-relevance').checked : false,
+    uiLanguage:        $('ui-language') ? $('ui-language').value : 'it',
     mdxSections:       collectMdxSectionSettings(),
     cloudSyncMode:     $('cloud-sync-mode') ? $('cloud-sync-mode').value : 'none',
     notionToken:       $('notion-token') ? $('notion-token').value.trim() : '',
