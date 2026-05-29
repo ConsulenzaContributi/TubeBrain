@@ -77,7 +77,7 @@ const Transcript = {
         (function() {
           try {
             const pr = window.ytInitialPlayerResponse;
-            if (!pr) { window.postMessage({ type: '${CHANNEL}', error: 'no_player_response' }, '*'); return; }
+            if (!pr) { window.postMessage({ type: '${CHANNEL}', error: 'no_player_response' }, location.origin); return; }
 
             const vd = pr.videoDetails || {};
             const captions = pr?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
@@ -105,9 +105,9 @@ const Transcript = {
                 })),
                 chapters
               }
-            }, '*');
+            }, location.origin);
           } catch(e) {
-            window.postMessage({ type: '${CHANNEL}', error: e.message }, '*');
+            window.postMessage({ type: '${CHANNEL}', error: e.message }, location.origin);
           }
         })();
       `;
@@ -117,6 +117,7 @@ const Transcript = {
       const timeout = setTimeout(() => reject(new Error('Timeout estrazione dati YouTube')), 8000);
 
       window.addEventListener('message', function handler(event) {
+        if (event.source !== window) return;
         if (event.data?.type !== CHANNEL) return;
         window.removeEventListener('message', handler);
         clearTimeout(timeout);

@@ -102,7 +102,7 @@
           try {
             var pr = window.ytInitialPlayerResponse;
             if (!pr) {
-              window.postMessage({ type: '${CHANNEL}', error: 'no_player_response' }, '*');
+              window.postMessage({ type: '${CHANNEL}', error: 'no_player_response' }, location.origin);
               return;
             }
 
@@ -144,10 +144,10 @@
                 captionTracks: captionTracks,
                 chapters: chapters
               }
-            }, '*');
+            }, location.origin);
 
           } catch(e) {
-            window.postMessage({ type: '${CHANNEL}', error: e.message }, '*');
+            window.postMessage({ type: '${CHANNEL}', error: e.message }, location.origin);
           }
         })();
       `;
@@ -160,6 +160,7 @@
       }, 8000);
 
       window.addEventListener('message', function handler(event) {
+        if (event.source !== window) return;
         if (!event.data || event.data.type !== CHANNEL) return;
         window.removeEventListener('message', handler);
         clearTimeout(timeout);
@@ -476,6 +477,7 @@
   // ── Listener messaggi dal popup / background ──────────────────────────────
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (sender.id && sender.id !== chrome.runtime.id) return false;
     if (message.action === 'TOGGLE_SELECTION_MODE') {
       toggleSelectionMode();
       sendResponse && sendResponse({ ok: true });
