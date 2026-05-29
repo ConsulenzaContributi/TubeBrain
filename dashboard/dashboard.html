@@ -215,6 +215,11 @@
         <div class="tab-actions">
           <button id="btn-export-global-archive" class="btn btn-primary btn-sm">📥 Esporta intero Archivio (Backup)</button>
           <button id="btn-obsidian-sync-all" class="btn btn-ghost btn-sm">🗂️ Sincronizza vault Obsidian</button>
+          <label class="btn btn-ghost btn-sm" style="cursor:pointer;" title="Importa PDF e analizza con AI">
+            📄 Importa PDF
+            <input type="file" id="pdf-import" accept="application/pdf" style="display:none;">
+          </label>
+          <span id="pdf-import-feedback" style="font-size:0.8em;margin-left:6px;"></span>
         </div>
       </div>
 

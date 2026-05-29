@@ -201,6 +201,35 @@ function bindButtons() {
   $('btn-generate-path')?.addEventListener('click', generateLearningPathUI);
   $('btn-export-global-archive')?.addEventListener('click', () => bg('EXPORT_GLOBAL_ARCHIVE'));
   $('btn-obsidian-sync-all')?.addEventListener('click', async e => obsidianSyncAll(e.currentTarget));
+
+  // ── Fase 6: Import PDF ────────────────────────────────────────────────────
+  $('pdf-import')?.addEventListener('change', async e => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const feedback = $('pdf-import-feedback');
+    if (feedback) feedback.textContent = '⏳ Estrazione testo...';
+    try {
+      const buf = await file.arrayBuffer();
+      // Carica pdf-extract.js come modulo dinamico (browser-only)
+      const { default: PdfExtractMod } = await import(chrome.runtime.getURL('utils/pdf-extract.js')).catch(() => ({ default: null }));
+      const extractor = PdfExtractMod || (typeof PdfExtract !== 'undefined' ? PdfExtract : null);
+      if (!extractor) throw new Error('Modulo PDF non disponibile.');
+      const text = await extractor.extractText(buf);
+      if (feedback) feedback.textContent = '⏳ Analisi AI...';
+      const res = await bg('ANALYZE_WEBPAGE', { articleData: { title: file.name.replace(/\.pdf$/i, ''), text, url: 'pdf://' + file.name } });
+      if (res && res.success) {
+        if (feedback) feedback.textContent = '✅ PDF analizzato e salvato.';
+        await loadSummaries();
+      } else {
+        if (feedback) feedback.textContent = '❌ ' + (res && res.error || 'Errore analisi.');
+      }
+    } catch (err) {
+      if (feedback) feedback.textContent = '❌ ' + err.message;
+    } finally {
+      e.target.value = '';
+      setTimeout(() => { if (feedback) feedback.textContent = ''; }, 5000);
+    }
+  });
   // ── Event delegation: Archivio globale ───────────────────────────────────
   $('archive-list').addEventListener('click', async e => {
     // Ignora click su link <a>
