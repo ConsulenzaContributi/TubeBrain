@@ -29,6 +29,7 @@ importScripts(
 );
 
 const appReady = initializeApp();
+appReady.then(() => reconcilePendingExtractions()).catch(() => {});
 const QUEUE_CONTEXT_MENU_ID = 'lh-add-queue-and-follow';
 const CTX_QUEUE = 'tb-queue';
 const CTX_QUEUE_FOLLOW = 'tb-queue-follow';
@@ -2768,8 +2769,20 @@ chrome.runtime.onInstalled.addListener(details => {
   if (details.reason === 'install') chrome.tabs.create({ url: chrome.runtime.getURL('options/options.html') });
 });
 
+async function reconcilePendingExtractions() {
+  try {
+    const summaries = await Storage.getSummaries();
+    const orphans = QueueReconcile.findOrphanedExtractions(summaries, Date.now(), 10 * 60 * 1000);
+    for (const s of orphans) {
+      await Storage.updateSummaryById(s.id, { status: 'pending', extractionStartedAt: null });
+    }
+    if (orphans.length) AppLogger?.info?.('Reconcile coda: ripristinati ' + orphans.length + ' video orfani.');
+  } catch (e) {}
+}
+
 chrome.runtime.onStartup.addListener(() => {
   ensureContextMenus().catch(() => {});
+  reconcilePendingExtractions().catch(() => {});
 });
 
 async function handleGenerateLearningPath(goal) {
