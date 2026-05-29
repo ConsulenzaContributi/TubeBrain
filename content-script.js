@@ -47,17 +47,28 @@
     }
   }
 
-  function shouldHandleShortcut(event) {
+  function detectShortcut(event) {
     const isMac = navigator.platform.toLowerCase().includes('mac');
-    const modifier = isMac ? event.metaKey : event.ctrlKey;
-    if (!modifier || !event.shiftKey) return false;
-    if (String(event.key || '').toLowerCase() !== 'p') return false;
+    const cmdOrCtrl = isMac ? event.metaKey : event.ctrlKey;
+    
     const active = document.activeElement;
     const typing = active && (
       /input|textarea|select/i.test(active.tagName) ||
       active.isContentEditable
     );
-    return !typing;
+    if (typing) return null;
+
+    // Cmd/Ctrl + Shift + P -> Queue shortcut
+    if (cmdOrCtrl && event.shiftKey && String(event.key || '').toLowerCase() === 'p') {
+      return 'queue';
+    }
+
+    // Alt/Option + S -> Screenshot
+    if (event.altKey && String(event.key || '').toLowerCase() === 's') {
+      return 'screenshot';
+    }
+
+    return null;
   }
 
   function resolveShortcutVideoUrl() {
@@ -318,9 +329,158 @@
     }, 4000);
   }
 
+  // ── Area 3: Selezione multipla miniature + accoda pagina ─────────────────
+
+  let selectionModeOn = false;
+  let selectedVideoUrls = new Set();
+  let _selectionObserver = null;
+  let _selectionDebounceTimer = null;
+
+  function harvestPageVideoUrls() {
+    const seen = new Set();
+    const anchors = document.querySelectorAll('a[href]');
+    for (const a of anchors) {
+      const url = normalizeYouTubeVideoUrl(a.href);
+      if (url) seen.add(url);
+      if (seen.size >= 200) break;
+    }
+    return Array.from(seen);
+  }
+
+  function updateSelectionCount() {
+    const counter = document.getElementById('tb-sel-count');
+    if (counter) counter.textContent = selectedVideoUrls.size + ' selezionati';
+  }
+
+  function ensureSelectionBar() {
+    if (document.getElementById('tb-selection-bar')) return;
+
+    const bar = document.createElement('div');
+    bar.id = 'tb-selection-bar';
+    bar.style.cssText = 'position:fixed;bottom:18px;right:18px;z-index:2147483000;display:flex;gap:8px;background:#fff;border:1px solid #f97316;border-radius:12px;padding:10px 12px;box-shadow:0 8px 24px rgba(0,0,0,.18);font:600 13px system-ui;align-items:center';
+
+    const counter = document.createElement('span');
+    counter.id = 'tb-sel-count';
+    counter.textContent = '0 selezionati';
+    counter.style.cssText = 'color:#374151;margin-right:4px';
+    bar.appendChild(counter);
+
+    const btnStyle = 'background:#f97316;color:#fff;border:none;border-radius:8px;padding:6px 12px;cursor:pointer;font:600 12px system-ui';
+
+    const btnQueue = document.createElement('button');
+    btnQueue.textContent = 'Accoda selezionati';
+    btnQueue.style.cssText = btnStyle;
+    btnQueue.addEventListener('click', () => queueUrls(Array.from(selectedVideoUrls)));
+    bar.appendChild(btnQueue);
+
+    const btnAll = document.createElement('button');
+    btnAll.textContent = 'Accoda tutta la pagina';
+    btnAll.style.cssText = btnStyle;
+    btnAll.addEventListener('click', () => queueUrls(harvestPageVideoUrls()));
+    bar.appendChild(btnAll);
+
+    const btnExit = document.createElement('button');
+    btnExit.textContent = 'Esci';
+    btnExit.style.cssText = 'background:#6b7280;color:#fff;border:none;border-radius:8px;padding:6px 12px;cursor:pointer;font:600 12px system-ui';
+    btnExit.addEventListener('click', () => toggleSelectionMode(false));
+    bar.appendChild(btnExit);
+
+    document.body.appendChild(bar);
+  }
+
+  function decorateThumbnails() {
+    const anchors = document.querySelectorAll('a[href]');
+    for (const a of anchors) {
+      const url = normalizeYouTubeVideoUrl(a.href);
+      if (!url) continue;
+
+      const container = a.closest('ytd-thumbnail, ytd-rich-item-renderer, ytd-video-renderer, ytd-compact-video-renderer, ytd-grid-video-renderer') || a;
+      if (container.dataset.tbDecorated === '1') continue;
+      container.dataset.tbDecorated = '1';
+
+      const currentPosition = container.style.position;
+      if (!currentPosition || currentPosition === 'static') {
+        container.style.position = 'relative';
+      }
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'tb-sel-checkbox';
+      cb.dataset.tbUrl = url;
+      cb.style.cssText = 'position:absolute;top:6px;left:6px;width:20px;height:20px;z-index:9999;cursor:pointer;accent-color:#f97316';
+
+      if (selectedVideoUrls.has(url)) cb.checked = true;
+
+      cb.addEventListener('change', () => {
+        if (cb.checked) {
+          selectedVideoUrls.add(cb.dataset.tbUrl);
+        } else {
+          selectedVideoUrls.delete(cb.dataset.tbUrl);
+        }
+        updateSelectionCount();
+      });
+
+      container.appendChild(cb);
+    }
+  }
+
+  function toggleSelectionMode(force) {
+    const next = (force !== undefined) ? !!force : !selectionModeOn;
+    selectionModeOn = next;
+
+    if (selectionModeOn) {
+      ensureSelectionBar();
+      decorateThumbnails();
+
+      // MutationObserver per lazy-loading
+      _selectionObserver = new MutationObserver(() => {
+        clearTimeout(_selectionDebounceTimer);
+        _selectionDebounceTimer = setTimeout(decorateThumbnails, 300);
+      });
+      _selectionObserver.observe(document.body, { childList: true, subtree: true });
+
+    } else {
+      // Rimuovi checkboxes
+      document.querySelectorAll('.tb-sel-checkbox').forEach(cb => cb.remove());
+      document.querySelectorAll('[data-tb-decorated]').forEach(el => delete el.dataset.tbDecorated);
+      selectedVideoUrls.clear();
+
+      // Nascondi barra
+      const bar = document.getElementById('tb-selection-bar');
+      if (bar) bar.remove();
+
+      // Disconnetti observer
+      if (_selectionObserver) {
+        _selectionObserver.disconnect();
+        _selectionObserver = null;
+      }
+      clearTimeout(_selectionDebounceTimer);
+    }
+  }
+
+  function queueUrls(urls) {
+    if (!urls || urls.length === 0) {
+      showQueueToast('error', 'Nessun video selezionato', '');
+      return;
+    }
+    chrome.runtime.sendMessage({ action: 'IMPORT_BATCH_URLS', input: urls.join('\n') })
+      .then(res => {
+        showQueueToast('success', (res.queued || 0) + ' video accodati', (res.totalResolved || urls.length) + ' risolti');
+      })
+      .catch(err => {
+        showQueueToast('error', 'Errore accodamento', String(err && err.message || err));
+      });
+  }
+
   // ── Listener messaggi dal popup / background ──────────────────────────────
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'TOGGLE_SELECTION_MODE') {
+      toggleSelectionMode();
+      sendResponse && sendResponse({ ok: true });
+      return true;
+    }
+
     if (message.action === 'SHOW_QUEUE_TOAST') {
       playQueueSound(message.status);
       showQueueToast(message.status, message.title, message.subtitle || '');
@@ -369,11 +529,54 @@
   document.addEventListener('contextmenu', captureHoveredVideo, true);
   document.addEventListener('focusin', captureHoveredVideo, true);
   document.addEventListener('keydown', event => {
-    if (!shouldHandleShortcut(event)) return;
+    const shortcut = detectShortcut(event);
+    if (!shortcut) return;
     event.preventDefault();
     event.stopPropagation();
-    triggerQueueShortcutFromPage();
+    
+    if (shortcut === 'queue') {
+      triggerQueueShortcutFromPage();
+    } else if (shortcut === 'screenshot') {
+      captureVideoScreenshot();
+    }
   }, true);
+
+  // ── Feature: Screenshot (Visual Notes) ──────────────────────────────────
+  async function captureVideoScreenshot() {
+    const videoElement = document.querySelector('video');
+    if (!videoElement) {
+      showQueueToast('error', 'Nessun video trovato nella pagina.');
+      return;
+    }
+
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoElement.videoWidth;
+      canvas.height = videoElement.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+      const base64Data = canvas.toDataURL('image/jpeg', 0.85);
+
+      const url = new URL(location.href);
+      const videoId = url.searchParams.get('v');
+      if (!videoId) throw new Error('Video ID non trovato');
+
+      const timestampMs = Math.floor(videoElement.currentTime * 1000);
+      const timestampStr = msToTs(timestampMs);
+
+      await chrome.runtime.sendMessage({
+        action: 'CAPTURE_FRAME',
+        videoId,
+        timestampStr,
+        base64Data
+      });
+
+      playQueueSound('success');
+      showQueueToast('success', '📸 Screenshot acquisito!', `Salvato al timestamp ${timestampStr}`);
+    } catch (e) {
+      showQueueToast('error', 'Errore acquisizione', e.message);
+    }
+  }
 
   // ── Indicatore visivo nella pagina ───────────────────────────────────────
   // Piccolo badge "LH" nell'angolo del video player per indicare che
@@ -384,7 +587,7 @@
     if (document.getElementById('lh-badge')) return;
     const badge = document.createElement('div');
     badge.id = 'lh-badge';
-    badge.title = 'Codex_Chrome-PlugIn_YouTube-Learn attivo — clicca l\'icona dell\'estensione per generare il riepilogo';
+    badge.title = 'TubeBrain attivo — clicca l\'icona dell\'estensione per generare il riepilogo';
     badge.style.cssText = `
       position: fixed; bottom: 80px; right: 16px; z-index: 9999;
       background: #1a73e8; color: white; font-size: 11px; font-weight: 700;

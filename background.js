@@ -334,6 +334,18 @@ async function handleMessage(message, sender) {
 // ── Keyboard Shortcut: Aggiungi alla coda ─────────────────────────────────────
 
 chrome.commands.onCommand.addListener(async (command) => {
+  if (command === 'toggle-queue') {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id && tab.url && tab.url.includes('youtube.com/')) {
+        await chrome.tabs.sendMessage(tab.id, { action: 'TOGGLE_SELECTION_MODE' }).catch(() => {});
+      } else {
+        showNotification('TubeBrain', 'Apri YouTube per usare la selezione multipla.');
+      }
+    } catch (e) {}
+    return;
+  }
+
   if (command !== 'add-to-queue') return;
 
   try {
