@@ -979,7 +979,8 @@ function renderCreatorArchiveItem(s, channelId, channelName) {
     ? new Date(s.createdAt).toLocaleDateString('it-IT', { day:'2-digit', month:'short', year:'numeric' })
     : '';
   const tags      = (s.tags || []).slice(0, 3).map(t => `<span class="tag">#${escHtml(t)}</span>`).join('');
-  const isPending = s.status === 'pending';
+  const isPending = s.status === 'pending' || s.status === 'extracting';
+  const inProgressLabel = s.status === 'extracting' ? '⏳ In estrazione' : '🕐 In coda';
   const cid       = channelId   || s.channelId   || '';
   const cname     = channelName || s.channelName || '';
 
@@ -990,7 +991,7 @@ function renderCreatorArchiveItem(s, channelId, channelName) {
       <div class="archive-info">
         <p class="archive-title">${escHtml(s.title)}</p>
         <div class="archive-tags">${tags}</div>
-        <p class="archive-date">${isPending ? '🕐 In coda' : '✅ Estratto'} · ${date}</p>
+        <p class="archive-date">${isPending ? inProgressLabel : '✅ Estratto'} · ${date}</p>
       </div>
       <div class="archive-actions">
         <a href="${s.url}" target="_blank" class="btn btn-ghost btn-sm" title="Guarda su YouTube">▶</a>
@@ -1164,7 +1165,8 @@ function renderArchive(summaries, highlightQuery = '') {
       ? `<span class="archive-path" title="${escHtml(s.savedFilename)}">📁 ${escHtml(s.savedFilename.split('/').slice(1, 3).join('/'))}…</span>`
       : '';
 
-    const isPending = s.status === 'pending';
+    const isPending = s.status === 'pending' || s.status === 'extracting';
+    const pendingLabel = s.status === 'extracting' ? 'In corso…' : 'Pending';
     const learningModeLabel = ({
       verbatim: 'Integrale',
       study: 'Studio',
@@ -1185,7 +1187,7 @@ function renderArchive(summaries, highlightQuery = '') {
           <p class="archive-title">${escHtml(s.title)}</p>
           <p class="archive-channel">${s.platform === 'instagram' ? '📸' : s.platform === 'web' ? '🌐' : '📺'} ${escHtml(s.channelName)}${s.publishDate ? ' · ' + s.publishDate.slice(0,10) : ''}${s.platform === 'web' ? '<span class="platform-badge web">Articolo</span>' : s.platform === 'instagram' ? `<span class="platform-badge instagram">${s.igType === 'reel' ? 'Reel' : s.igType === 'profile' ? 'Profilo' : 'Post'}</span>` : ''}</p>
           <div class="archive-meta-row">
-            <span class="meta-pill ${isPending ? 'pending' : 'extracted'}">${isPending ? 'Pending' : 'Estratto'}</span>
+            <span class="meta-pill ${isPending ? 'pending' : 'extracted'}">${isPending ? pendingLabel : 'Estratto'}</span>
             <span class="meta-pill">${outputFormat}</span>
             <span class="meta-pill">${learningModeLabel}</span>
             ${qualityLabel ? `<span class="meta-pill">${qualityLabel}</span>` : ''}
