@@ -5,7 +5,7 @@
 const Storage = {
   _initPromise: null,
   SETTINGS_BACKUP_KEY: 'settingsBackup',
-  SECRET_KEYS: ['geminiApiKey', 'openaiApiKey', 'youtubeApiKey'],
+  SECRET_KEYS: ['geminiApiKey', 'openaiApiKey', 'youtubeApiKey', 'notionToken'],
 
   _stripSecrets(settings) {
     const copy = { ...settings };

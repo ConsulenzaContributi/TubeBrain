@@ -162,6 +162,9 @@ const AppSchema = {
       uiLanguage: ['it', 'en'].includes(settings.uiLanguage) ? settings.uiLanguage : 'it',
       settingsUpdatedAt: this.normalizeNumber(settings.settingsUpdatedAt, 0),
       settingsSchemaVersion: this.VERSION,
+      notionToken: this.normalizeString(settings.notionToken, ''),
+      notionDbId: this.normalizeString(settings.notionDbId, ''),
+      cloudSyncMode: ['none', 'notion', 'github', 'both'].includes(settings.cloudSyncMode) ? settings.cloudSyncMode : 'none',
     };
   },
 
