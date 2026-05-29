@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Setup Iniziale - TubeBrain</title>
+  <link rel="stylesheet" href="onboarding.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="onboarding-container">
+    <div class="brand-header">
+      <span class="logo-icon">📚</span>
+      <h1>TubeBrain</h1>
+    </div>
+
+    <!-- STEP 1: WELCOME -->
+    <div id="step-1" class="step-card active">
+      <div class="step-icon">👋</div>
+      <h2>Benvenuto in TubeBrain</h2>
+      <p class="subtitle">Trasforma YouTube in una piattaforma di studio con riassunti AI e archivi locali.</p>
+      <p>Prima di iniziare, dobbiamo configurare il "Cervello" (Motore AI) e la memoria (Cartella di salvataggio). Ci vorranno meno di 2 minuti.</p>
+      <div class="actions">
+        <button class="btn btn-primary" id="btn-next-1">Inizia Configurazione</button>
+        <button class="btn btn-ghost" id="btn-skip">Salta e usa impostazioni di base</button>
+      </div>
+    </div>
+
+    <!-- STEP 2: ENGINE CHOICE -->
+    <div id="step-2" class="step-card">
+      <div class="step-icon">🧠</div>
+      <h2>Scegli il tuo Motore AI</h2>
+      <p class="subtitle">Seleziona quale intelligenza artificiale guiderà le tue estensioni.</p>
+      
+      <div class="engine-grid">
+        <div class="engine-card active" data-engine="gemini">
+          <h3>✨ Google Gemini</h3>
+          <p>Super veloce e ottimizzato per YouTube. Offre un piano gratuito molto generoso (15 richieste/minuto) che copre ampiamente l'uso quotidiano.</p>
+          <div class="badge">Consigliato</div>
+        </div>
+        <div class="engine-card" data-engine="openai">
+          <h3>⚡ OpenAI (ChatGPT)</h3>
+          <p>Estremamente accurato (GPT-4o). Richiede un account sviluppatore con credito prepagato. Ideale per uso professionale intensivo.</p>
+        </div>
+      </div>
+      
+      <div class="actions">
+        <button class="btn btn-primary" id="btn-next-2">Avanti</button>
+        <button class="btn btn-ghost" class="btn-back">Indietro</button>
+      </div>
+    </div>
+
+    <!-- STEP 3: API KEY -->
+    <div id="step-3" class="step-card">
+      <div class="step-icon">🔑</div>
+      <h2>Inserisci l'API Key</h2>
+      <p class="subtitle" id="api-subtitle">Collega il tuo account Google AI Studio.</p>
+      
+      <div class="form-group">
+        <input type="password" id="api-key-input" placeholder="Incolla la tua API Key qui..." autocomplete="off">
+      </div>
+      
+      <div class="guide-box">
+        <h4>Come ottenerla gratis:</h4>
+        <ol id="api-guide-list">
+          <li>Vai su <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a></li>
+          <li>Clicca su "Create API Key"</li>
+          <li>Copia la chiave (inizia con `AIzaSy...`) e incollala qui sopra</li>
+        </ol>
+      </div>
+      
+      <div class="actions">
+        <button class="btn btn-secondary" id="btn-test-key">Testa Connessione</button>
+        <button class="btn btn-primary" id="btn-next-3" disabled>Avanti</button>
+        <button class="btn btn-ghost" class="btn-back">Indietro</button>
+      </div>
+      <p id="api-feedback" class="feedback"></p>
+    </div>
+
+    <!-- STEP 4: FOLDER PICKER -->
+    <div id="step-4" class="step-card">
+      <div class="step-icon">📂</div>
+      <h2>Cartella di Salvataggio</h2>
+      <p class="subtitle">Scegli dove vuoi che TubeBrain salvi i file Markdown sul tuo Mac.</p>
+      
+      <div class="folder-picker-box">
+        <button class="btn btn-primary" id="btn-pick-folder">Apri Finder e Scegli...</button>
+        <p id="folder-feedback" class="feedback">Nessuna cartella selezionata.</p>
+      </div>
+      
+      <div class="actions">
+        <button class="btn btn-primary" id="btn-next-4">Avanti</button>
+        <button class="btn btn-ghost" class="btn-back">Indietro</button>
+      </div>
+    </div>
+
+    <!-- STEP 5: ARCHIVE STRATEGY -->
+    <div id="step-5" class="step-card">
+      <div class="step-icon">🏗️</div>
+      <h2>Struttura Archivio</h2>
+      <p class="subtitle">Come vuoi organizzare i tuoi appunti?</p>
+      
+      <div class="strategy-list">
+        <label class="strategy-option">
+          <input type="radio" name="archive_strategy" value="author-first" checked>
+          <div class="strategy-details">
+            <strong>Libreria per Autore</strong>
+            <span>Es: Simone Rizzo / 2026 / 2026-05-29_TitoloVideo.mdx</span>
+          </div>
+        </label>
+        <label class="strategy-option">
+          <input type="radio" name="archive_strategy" value="chronological">
+          <div class="strategy-details">
+            <strong>Diario Cronologico</strong>
+            <span>Es: 2026 / Simone Rizzo / 2026-05-29_TitoloVideo.mdx</span>
+          </div>
+        </label>
+      </div>
+      
+      <div class="actions">
+        <button class="btn btn-success" id="btn-finish">Termina Configurazione</button>
+        <button class="btn btn-ghost" class="btn-back">Indietro</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="../utils/sanitize.js"></script>
+  <script src="../schemas/app-schema.js"></script>
+  <script src="../utils/filesystem.js"></script>
+  <!-- Non possiamo usare AIProvider dal popup se è complesso, ma potremmo fare messaggi al background -->
+  <script src="onboarding.js"></script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8">
-  <title>Codex_Chrome-PlugIn_YouTube-Learn — Impostazioni</title>
+  <title>TubeBrain — Impostazioni</title>
   <link rel="stylesheet" href="options.css">
 </head>
 <body>
@@ -12,9 +12,9 @@
     <header class="page-header">
       <div class="logo">
         <span>📚</span>
-        <span class="logo-text">Codex_Chrome-PlugIn_YouTube-Learn — Impostazioni</span>
+        <span class="logo-text">TubeBrain — Impostazioni</span>
       </div>
-      <span class="version">v2.2.7</span>
+      <span class="version">A1.0.9</span>
     </header>
 
     <div class="content">
@@ -45,7 +45,7 @@
       <section class="card">
         <h2 class="card-title">🔑 API Key</h2>
         <p class="card-desc">
-          Codex_Chrome-PlugIn_YouTube-Learn supporta provider multipli. Al momento puoi usare Gemini oppure OpenAI.
+          TubeBrain supporta provider multipli. Al momento puoi usare Gemini oppure OpenAI.
         </p>
 
         <div class="field">
@@ -193,48 +193,51 @@
         </div>
       </section>
 
-      <!-- ── Struttura MD ── -->
+      <!-- ── Cloud Sync ── -->
       <section class="card">
-        <h2 class="card-title">📄 Struttura Markdown</h2>
-        <p class="card-desc">Questi contenuti fanno parte del pacchetto didattico generato e devono coesistere nello stesso file MDX.</p>
+        <h2 class="card-title">☁️ Cloud Sync (Notion / GitHub)</h2>
+        <p class="card-desc">
+          Sincronizza automaticamente gli appunti nel Cloud ogni volta che estrai un video.
+        </p>
 
-        <div class="checkboxes">
-          <label class="check-item">
-            <input type="checkbox" name="section" value="summary" checked disabled>
-            <span>📋 Riepilogo Generale <span class="badge-req">obbligatorio</span></span>
-          </label>
-          <label class="check-item">
-            <input type="checkbox" name="section" value="chapters" checked disabled>
-            <span>📚 Capitoli e Sottocapitoli <span class="badge-req">obbligatorio</span></span>
-          </label>
-          <label class="check-item">
-            <input type="checkbox" name="section" value="prerequisites" checked>
-            <span>🎯 Prerequisiti</span>
-          </label>
-          <label class="check-item">
-            <input type="checkbox" name="section" value="tools" checked>
-            <span>🛠️ Tool e Software Citati</span>
-          </label>
-          <label class="check-item">
-            <input type="checkbox" name="section" value="code" checked>
-            <span>💻 Codice e Comandi</span>
-          </label>
-          <label class="check-item">
-            <input type="checkbox" name="section" value="takeaways" checked>
-            <span>🔑 Punti Chiave e Takeaway</span>
-          </label>
-          <label class="check-item">
-            <input type="checkbox" name="section" value="blueprint" checked>
-            <span>🔄 Blueprint per Replicazione</span>
-          </label>
-          <label class="check-item">
-            <input type="checkbox" name="section" value="antigravity" checked>
-            <span>🤖 Note per Automazione Google Antigravity</span>
-          </label>
-          <label class="check-item">
-            <input type="checkbox" name="section" value="resources" checked>
-            <span>📎 Risorse e Link Menzionati</span>
-          </label>
+        <div class="field">
+          <label class="label" for="cloud-sync-mode">Modalità Sync</label>
+          <select id="cloud-sync-mode" class="input input-select">
+            <option value="none" selected>Nessuna (Solo locale)</option>
+            <option value="github">Solo GitHub (Esportazione .mdx file)</option>
+            <option value="notion">Solo Notion (Database strutturato)</option>
+            <option value="both">Entrambe</option>
+          </select>
+        </div>
+
+        <div class="field provider-panel provider-panel-notion hidden" id="panel-notion">
+          <label class="label" for="notion-token">Notion API Token</label>
+          <div class="input-group">
+            <input type="password" id="notion-token" class="input" placeholder="secret_...">
+          </div>
+          <label class="label" for="notion-db-id" style="margin-top: 10px;">Notion Database ID</label>
+          <div class="input-group">
+            <input type="text" id="notion-db-id" class="input" placeholder="ID del database Notion (32 caratteri)">
+          </div>
+          <p class="field-hint">Crea un'integrazione interna in Notion e convidivi il tuo database con essa.</p>
+        </div>
+
+        <div class="field provider-panel provider-panel-github hidden" id="panel-github">
+          <label class="label" for="github-token">GitHub Personal Access Token (PAT)</label>
+          <div class="input-group">
+            <input type="password" id="github-token" class="input" placeholder="ghp_...">
+          </div>
+          <div style="display: flex; gap: 10px; margin-top: 10px;">
+            <div style="flex: 1;">
+              <label class="label" for="github-owner">Owner (User/Org)</label>
+              <input type="text" id="github-owner" class="input" placeholder="es. claudecodex">
+            </div>
+            <div style="flex: 1;">
+              <label class="label" for="github-repo">Repository</label>
+              <input type="text" id="github-repo" class="input" placeholder="es. my-learning-hub">
+            </div>
+          </div>
+          <p class="field-hint">Il token deve avere i permessi per scrivere contenuti nel repository ("repo" scope).</p>
         </div>
       </section>
 
@@ -276,7 +279,7 @@
       <section class="card">
         <h2 class="card-title">📥 Auto-Queue</h2>
         <p class="card-desc">
-          Codex_Chrome-PlugIn_YouTube-Learn può controllare automaticamente i feed dei creator che segui e accodare i nuovi video pubblicati dopo il follow.
+          TubeBrain può controllare automaticamente i feed dei creator che segui e accodare i nuovi video pubblicati dopo il follow.
         </p>
 
         <div class="field">
@@ -292,6 +295,21 @@
             Creator con <strong>priorità ⚡</strong> vengono estratti immediatamente; gli altri restano in coda.
           </p>
         </div>
+
+        <div class="field">
+          <label class="label" for="user-topics">Interessi e Obiettivi (Screening AI)</label>
+          <input type="text" id="user-topics" class="input" placeholder="Es. Programmazione, AI, Startups, Marketing...">
+          <p class="field-hint">
+            L'AI valuterà (Screening) i nuovi video in background per capire se corrispondono ai tuoi interessi, assegnando un Relevance Score da 1 a 10.
+          </p>
+        </div>
+
+        <div class="field">
+          <label class="toggle-wrap">
+            <input type="checkbox" id="auto-extract-high-relevance">
+            <span class="toggle-label">Auto-estrai dossier per Score altissimo (≥9)</span>
+          </label>
+        </div>
       </section>
 
       <!-- ── Info ── -->
@@ -299,7 +317,7 @@
         <h2 class="card-title">ℹ️ Come funziona</h2>
         <ol class="how-list">
           <li>Apri un video YouTube</li>
-          <li>Clicca l'icona 📚 Codex_Chrome-PlugIn_YouTube-Learn nella barra del browser</li>
+          <li>Clicca l'icona 📚 TubeBrain nella barra del browser</li>
           <li>Scegli la modalità iniziale del file e premi <strong>Genera Learning MDX</strong></li>
           <li>Il provider AI selezionato analizza la trascrizione e genera il documento multi-livello</li>
           <li>Salva il file <code>.mdx</code> e trovalo nell'Archivio della Dashboard</li>
@@ -331,6 +349,8 @@
     </div>
   </div>
 
+  <script src="../utils/sanitize.js"></script>
+  <script src="../schemas/app-schema.js"></script>
   <script src="options.js"></script>
 </body>
 </html>
