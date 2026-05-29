@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Codex_Chrome-PlugIn_YouTube-Learn — Dashboard</title>
+  <title>TubeBrain — Dashboard</title>
   <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
@@ -12,7 +12,7 @@
   <aside class="sidebar">
     <div class="sidebar-logo">
       <span class="logo-icon">📚</span>
-      <span class="logo-text">Codex_Chrome-PlugIn_YouTube-Learn</span>
+      <span class="logo-text">TubeBrain</span>
     </div>
 
     <nav class="nav">
@@ -23,6 +23,10 @@
       <button class="nav-item" data-tab="creators">
         <span class="nav-icon">👥</span> Creator
         <span id="nav-creators-count" class="nav-count">0</span>
+      </button>
+      <button class="nav-item" data-tab="screening">
+        <span class="nav-icon">💡</span> Segnalazioni
+        <span id="nav-screening-badge" class="nav-badge hidden">0</span>
       </button>
       <button class="nav-item" data-tab="archive">
         <span class="nav-icon">📂</span> Archivio
@@ -38,6 +42,9 @@
       </button>
       <button class="nav-item" data-tab="map">
         <span class="nav-icon">🗺️</span> Mappa
+      </button>
+      <button class="nav-item" data-tab="paths">
+        <span class="nav-icon">🎓</span> Percorsi
       </button>
       <button class="nav-item" data-tab="guide">
         <span class="nav-icon">📖</span> Guida
@@ -114,6 +121,27 @@
       <div id="feed-list" class="video-grid"></div>
     </section>
 
+    <!-- ── TAB: SCREENING (DAILY DIGEST) ── -->
+    <section id="tab-screening" class="tab hidden">
+      <div class="tab-header">
+        <div>
+          <h1 class="tab-title">Segnalazioni AI (Daily Digest)</h1>
+          <p class="tab-sub">Video valutati automaticamente in background per te. Approvali per generare il dossier, oppure scartali.</p>
+        </div>
+        <div class="tab-actions">
+          <button id="btn-refresh-screening" class="btn btn-ghost btn-sm">🔄 Aggiorna</button>
+        </div>
+      </div>
+
+      <div id="screening-empty" class="empty-state hidden">
+        <div class="empty-icon">🎉</div>
+        <p class="empty-title">Nessuna segnalazione in sospeso</p>
+        <p class="empty-sub">Tutti i nuovi video sono stati valutati. Attendi nuovi upload dai creator che segui.</p>
+      </div>
+
+      <div id="screening-list" class="video-grid"></div>
+    </section>
+
     <!-- ── TAB: CREATORS ── -->
     <section id="tab-creators" class="tab hidden">
       <div class="tab-header">
@@ -183,6 +211,9 @@
         <div>
           <h1 class="tab-title">Archivio Learning MDX</h1>
           <p class="tab-sub">Tutti i video analizzati, pronti da riaprire, filtrare e riutilizzare come base di studio</p>
+        </div>
+        <div class="tab-actions">
+          <button id="btn-export-global-archive" class="btn btn-primary btn-sm">📥 Esporta intero Archivio (Backup)</button>
         </div>
       </div>
 
@@ -421,7 +452,7 @@
       <div class="tab-header">
         <div>
           <h1 class="tab-title">📖 Guida al Plugin</h1>
-          <p class="tab-sub">Codex_Chrome-PlugIn_YouTube-Learn v2.2.7 — Tutto quello che devi sapere</p>
+          <p class="tab-sub">TubeBrain A1.0.9 — Tutto quello che devi sapere</p>
         </div>
       </div>
 
@@ -442,10 +473,21 @@
 
       <div class="guide-content">
 
+        <!-- ── SCORCIATOIE DA TASTIERA ── -->
+        <div class="guide-section" id="guide-shortcuts">
+          <h2 class="guide-h2">⌨️ Scorciatoie da tastiera</h2>
+          <ul class="guide-p">
+            <li><strong>⌘⇧P / Ctrl+Shift+P</strong> — Accoda il video corrente alla coda</li>
+            <li><strong>Alt+Q</strong> — Attiva/disattiva la selezione multipla delle miniature sulla pagina YouTube</li>
+            <li><strong>⌘⇧O / Ctrl+Shift+O</strong> — Avvia la cattura testo a schermo (OCR) sul video</li>
+          </ul>
+          <p class="guide-p">Personalizzabili da <a href="chrome://extensions/shortcuts" target="_blank">chrome://extensions/shortcuts</a>.</p>
+        </div>
+
         <!-- ── INIZIO RAPIDO ── -->
         <div class="guide-section" id="guide-start">
           <h2 class="guide-h2">🚀 Inizio Rapido</h2>
-          <p class="guide-p">Codex_Chrome-PlugIn_YouTube-Learn trasforma qualsiasi video YouTube in un documento Markdown strutturato, pronto per Obsidian o qualsiasi editor di note. Ecco come iniziare in 3 minuti.</p>
+          <p class="guide-p">TubeBrain trasforma qualsiasi video YouTube in un documento Markdown strutturato, pronto per Obsidian o qualsiasi editor di note. Ecco come iniziare in 3 minuti.</p>
 
           <div class="guide-steps">
             <div class="guide-step">
@@ -466,7 +508,7 @@
               <div class="guide-step-num">3</div>
               <div class="guide-step-body">
                 <strong>Apri un video YouTube e clicca l'icona 📚</strong>
-                <p>Naviga su un video YouTube → clicca l'icona Codex_Chrome-PlugIn_YouTube-Learn nella barra del browser → premi <strong>✨ Genera Learning MDX</strong>. Il file viene salvato automaticamente in <code>LearningHub/</code>.</p>
+                <p>Naviga su un video YouTube → clicca l'icona TubeBrain nella barra del browser → premi <strong>✨ Genera Learning MDX</strong>. Il file viene salvato automaticamente in <code>LearningHub/</code>.</p>
               </div>
             </div>
           </div>
@@ -479,7 +521,7 @@
         <!-- ── OTTENERE LE API ── -->
         <div class="guide-section" id="guide-api-keys">
           <h2 class="guide-h2">🔑 Come Ottenere le API Gratuite</h2>
-          <p class="guide-p">Codex_Chrome-PlugIn_YouTube-Learn usa due API di Google, entrambe gratuite per uso personale. Ecco come ottenerle passo per passo.</p>
+          <p class="guide-p">TubeBrain usa due API di Google, entrambe gratuite per uso personale. Ecco come ottenerle passo per passo.</p>
 
           <!-- GEMINI API -->
           <div class="guide-api-block">
@@ -502,7 +544,7 @@
                 <div class="guide-step-num">2</div>
                 <div class="guide-step-body">
                   <strong>Crea un nuovo progetto (se richiesto)</strong>
-                  <p>Se è la prima volta, Google ti chiede di creare un progetto. Dai un nome a piacere (es. "Codex_Chrome-PlugIn_YouTube-Learn") e conferma.</p>
+                  <p>Se è la prima volta, Google ti chiede di creare un progetto. Dai un nome a piacere (es. "TubeBrain") e conferma.</p>
                 </div>
               </div>
               <div class="guide-step">
@@ -522,14 +564,14 @@
               <div class="guide-step">
                 <div class="guide-step-num">5</div>
                 <div class="guide-step-body">
-                  <strong>Incollala nelle Impostazioni di Codex_Chrome-PlugIn_YouTube-Learn</strong>
+                  <strong>Incollala nelle Impostazioni di TubeBrain</strong>
                   <p>Sidebar → ⚙️ Impostazioni → campo <em>"Gemini API Key"</em> → incolla → clicca <strong>Test</strong> per verificare → <strong>Salva Impostazioni</strong>.</p>
                 </div>
               </div>
             </div>
 
             <div class="guide-callout guide-callout-success">
-              ✅ <strong>Fatto!</strong> Con questa sola chiave puoi già usare tutte le funzioni principali di Codex_Chrome-PlugIn_YouTube-Learn: riepiloghi, chat, ricerca semantica.
+              ✅ <strong>Fatto!</strong> Con questa sola chiave puoi già usare tutte le funzioni principali di TubeBrain: riepiloghi, chat, ricerca semantica.
             </div>
           </div>
 
@@ -554,7 +596,7 @@
                 <div class="guide-step-num">2</div>
                 <div class="guide-step-body">
                   <strong>Seleziona (o crea) lo stesso progetto</strong>
-                  <p>In alto a sinistra, clicca sul selettore progetto → seleziona il progetto che hai creato in AI Studio (es. "Codex_Chrome-PlugIn_YouTube-Learn"). Se non lo vedi, cerca per nome.</p>
+                  <p>In alto a sinistra, clicca sul selettore progetto → seleziona il progetto che hai creato in AI Studio (es. "TubeBrain"). Se non lo vedi, cerca per nome.</p>
                 </div>
               </div>
               <div class="guide-step">
@@ -595,8 +637,8 @@
               <span class="guide-api-badge guide-api-badge-opt">Nessuna chiave</span>
               <h3 class="guide-h3" style="margin:0">📸 Instagram — Analisi senza API aggiuntive</h3>
             </div>
-            <p class="guide-p">Per analizzare post, reel e profili Instagram <strong>non serve nessuna API aggiuntiva</strong>. Codex_Chrome-PlugIn_YouTube-Learn usa la Gemini API Key già configurata per analizzare il testo visibile nella pagina.</p>
-            <p class="guide-p"><strong>Come funziona:</strong> apri la pagina Instagram nel browser (post, reel o profilo) → clicca l'icona 📚 Codex_Chrome-PlugIn_YouTube-Learn → clicca <strong>📸 Analizza</strong>. L'estensione legge la caption, gli hashtag e il testo visibile nella pagina, poi Gemini genera il riepilogo.</p>
+            <p class="guide-p">Per analizzare post, reel e profili Instagram <strong>non serve nessuna API aggiuntiva</strong>. TubeBrain usa la Gemini API Key già configurata per analizzare il testo visibile nella pagina.</p>
+            <p class="guide-p"><strong>Come funziona:</strong> apri la pagina Instagram nel browser (post, reel o profilo) → clicca l'icona 📚 TubeBrain → clicca <strong>📸 Analizza</strong>. L'estensione legge la caption, gli hashtag e il testo visibile nella pagina, poi Gemini genera il riepilogo.</p>
             <div class="guide-callout guide-callout-warn">
               ⚠️ <strong>Limitazioni Instagram:</strong> i Reel e i video non hanno trascrizione audio (a differenza di YouTube). L'analisi si basa solo sul testo scritto (caption, hashtag, bio). Per risultati migliori, assicurati di essere loggato su Instagram prima di analizzare.
             </div>
@@ -655,14 +697,14 @@
 
           <h3 class="guide-h3">Come estrarre i video in coda</h3>
           <p class="guide-p">Vai nella tab <strong>Archivio</strong> → usa il filtro <em>"🕐 Da estrarre"</em> → clicca <strong>✨ Estrai</strong> sulla card del video.</p>
-          <p class="guide-p">L'estrazione avviene <strong>completamente in background</strong>: Codex_Chrome-PlugIn_YouTube-Learn apre la pagina YouTube in una tab nascosta, legge la trascrizione, chiama Gemini, salva il file e chiude la tab. Riceverai una <strong>notifica Chrome</strong> al termine.</p>
+          <p class="guide-p">L'estrazione avviene <strong>completamente in background</strong>: TubeBrain apre la pagina YouTube in una tab nascosta, legge la trascrizione, chiama Gemini, salva il file e chiude la tab. Riceverai una <strong>notifica Chrome</strong> al termine.</p>
 
           <div class="guide-callout guide-callout-warn">
             ⚠️ L'estrazione in background richiede che Chrome rimanga aperto. Non chiudere il browser durante l'elaborazione.
           </div>
 
           <h3 class="guide-h3">Personalizzare la scorciatoia</h3>
-          <p class="guide-p">Vai su <strong>chrome://extensions/shortcuts</strong> → trova "Codex_Chrome-PlugIn_YouTube-Learn" → clicca la matita accanto a "Aggiungi video alla coda" → inserisci la combinazione preferita.</p>
+          <p class="guide-p">Vai su <strong>chrome://extensions/shortcuts</strong> → trova "TubeBrain" → clicca la matita accanto a "Aggiungi video alla coda" → inserisci la combinazione preferita.</p>
         </div>
 
         <!-- ── ARCHIVIO ── -->
@@ -706,7 +748,7 @@
           </div>
 
           <h3 class="guide-h3">Come funziona (RAG)</h3>
-          <p class="guide-p">Quando invii una domanda, Codex_Chrome-PlugIn_YouTube-Learn usa un approccio <strong>RAG (Retrieval Augmented Generation)</strong>:</p>
+          <p class="guide-p">Quando invii una domanda, TubeBrain usa un approccio <strong>RAG (Retrieval Augmented Generation)</strong>:</p>
           <div class="guide-steps">
             <div class="guide-step">
               <div class="guide-step-num">1</div>
@@ -905,11 +947,40 @@
           </div>
 
           <div class="guide-callout guide-callout-info" style="margin-top:24px">
-            🐛 <strong>Problema tecnico?</strong> Nella maggior parte dei casi basta ricaricare la tab YouTube con <strong>F5</strong> e riaprire il popup. Se il problema persiste, vai su <code>chrome://extensions</code> → 🔄 Aggiorna Codex_Chrome-PlugIn_YouTube-Learn → F5 su YouTube.
+            🐛 <strong>Problema tecnico?</strong> Nella maggior parte dei casi basta ricaricare la tab YouTube con <strong>F5</strong> e riaprire il popup. Se il problema persiste, vai su <code>chrome://extensions</code> → 🔄 Aggiorna TubeBrain → F5 su YouTube.
           </div>
         </div>
 
       </div><!-- /guide-content -->
+    </section>
+
+    <!-- ── TAB: PERCORSI DI STUDIO ── -->
+    <section id="tab-paths" class="tab hidden">
+      <div class="tab-header">
+        <div>
+          <h1 class="tab-title">Percorsi di Studio (Learning Paths)</h1>
+          <p class="tab-sub">L'Intelligenza Artificiale ordina i tuoi video in base al tuo obiettivo.</p>
+        </div>
+      </div>
+      
+      <div class="hero-strip">
+        <div class="hero-strip-copy" style="width: 100%">
+          <h2 class="hero-strip-title">Cosa vuoi imparare oggi?</h2>
+          <div style="display: flex; gap: 10px; margin-top: 15px;">
+            <input type="text" id="path-goal-input" class="search-input" style="flex: 1; padding: 12px; font-size: 16px;" placeholder="es. Voglio imparare React e creare una to-do list...">
+            <button id="btn-generate-path" class="btn btn-primary">Genera Percorso</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="path-loading" class="loading-state hidden">
+        <div class="spinner"></div>
+        <p>Analisi in corso e generazione del curriculum didattico...</p>
+      </div>
+
+      <div id="path-results" class="video-grid" style="display: flex; flex-direction: column; gap: 15px;">
+        <!-- Lezioni andranno qui -->
+      </div>
     </section>
 
   </main>

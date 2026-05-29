@@ -1,0 +1,10 @@
+const assert = require('assert');
+const fs = require('fs');
+const bg = fs.readFileSync(__dirname + '/../background.js', 'utf8');
+['tb-queue','tb-queue-follow','tb-generate-now','tb-queue-priority','tb-parent'].forEach(id => assert.ok(bg.includes(id), 'manca menu id ' + id));
+assert.ok(bg.includes("command === 'start-selection'"), 'manca wiring start-selection');
+assert.ok(bg.includes('options = {}') && bg.includes('options.follow'), 'addToQueue non gestisce options.follow');
+assert.ok(bg.includes('updateSummaryById') && bg.includes('isPriority'), 'manca gestione priorità');
+const html = fs.readFileSync(__dirname + '/../dashboard/dashboard.html', 'utf8');
+assert.ok(/Alt\+Q/i.test(html) && /Shift\+O/i.test(html) && /Shift\+P/i.test(html), 'guida shortcut incompleta');
+console.log('area4-5-menu-shortcuts OK');

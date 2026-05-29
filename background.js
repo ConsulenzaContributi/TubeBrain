@@ -28,6 +28,10 @@ importScripts(
 
 const appReady = initializeApp();
 const QUEUE_CONTEXT_MENU_ID = 'lh-add-queue-and-follow';
+const CTX_QUEUE = 'tb-queue';
+const CTX_QUEUE_FOLLOW = 'tb-queue-follow';
+const CTX_GENERATE_NOW = 'tb-generate-now';
+const CTX_QUEUE_PRIORITY = 'tb-queue-priority';
 const recentQueueActions = new Map();
 const RUNTIME_STATUS_KEY = 'runtimeStatus';
 const STATUS_PANEL_URL = chrome.runtime.getURL('status/status.html');
@@ -346,6 +350,18 @@ chrome.commands.onCommand.addListener(async (command) => {
     return;
   }
 
+  if (command === 'start-selection') {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id && tab.url && tab.url.includes('youtube.com/')) {
+        await chrome.tabs.sendMessage(tab.id, { action: 'startSelection' }).catch(() => {});
+      } else {
+        showNotification('TubeBrain', 'Apri un video YouTube per usare l\'OCR.');
+      }
+    } catch (e) {}
+    return;
+  }
+
   if (command !== 'add-to-queue') return;
 
   try {
@@ -380,24 +396,24 @@ chrome.commands.onCommand.addListener(async (command) => {
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId !== QUEUE_CONTEXT_MENU_ID) return;
+  const known = [CTX_QUEUE, CTX_QUEUE_FOLLOW, CTX_GENERATE_NOW, CTX_QUEUE_PRIORITY, QUEUE_CONTEXT_MENU_ID];
+  if (!known.includes(info.menuItemId)) return;
   try {
-    await updateRuntimeStatus({
-      kind: 'info',
-      kicker: 'Messa in coda',
-      title: 'Azione dal menu contestuale',
-      detail: 'Lettura del link video selezionato.',
-      progress: 10,
-      phase: 'queue-start',
-      icon: '🕐',
-    }, tab?.windowId || null);
+    await updateRuntimeStatus({ kind: 'info', kicker: 'Messa in coda', title: 'Azione dal menu contestuale', detail: 'Lettura del link video selezionato.', progress: 10, phase: 'queue-start', icon: '🕐' }, tab?.windowId || null);
     const targetUrl = resolveContextMenuTargetUrl(info, tab);
     if (!targetUrl) {
       await failRuntimeStatus(new Error('Nessun video YouTube rilevato dal menu contestuale.'), tab?.windowId || null);
       showNotification('TubeBrain ⚠️', 'Nessun video YouTube rilevato dal menu contestuale.');
       return;
     }
-    await queueVideoFromUrl(targetUrl, tab);
+    const follow = info.menuItemId !== CTX_QUEUE;
+    const result = await queueVideoFromUrl(targetUrl, tab, { follow });
+    if (info.menuItemId === CTX_GENERATE_NOW && result && result.id) {
+      await startBackgroundExtraction(result.id);
+    } else if (info.menuItemId === CTX_QUEUE_PRIORITY && result && result.id) {
+      try { await Storage.updateSummaryById(result.id, { isPriority: true }); } catch (e) {}
+      showNotification('TubeBrain ⭐', 'Video accodato con priorità.');
+    }
   } catch (e) {
     await failRuntimeStatus(e, tab?.windowId || null);
     showNotification('TubeBrain ❌', e.message);
@@ -469,7 +485,8 @@ function extractPreferredYouTubeTargetUrl() {
 
 // ── Aggiungi alla coda (senza estrarre) ──────────────────────────────────────
 
-async function addToQueue(videoData) {
+async function addToQueue(videoData, options = {}) {
+  const follow = options.follow !== false;
   const summaries = await Storage.getSummaries();
   const exists = summaries.find(s => s.videoId === videoData.videoId);
   if (exists) {
@@ -507,7 +524,7 @@ async function addToQueue(videoData) {
   // ── Auto-follow: se il creator non è ancora seguito, aggiungilo ──
   let creatorAdded = false;
   let creatorFollowed = false;
-  if (videoData.channelId) {
+  if (videoData.channelId && follow) {
     const creators = await Storage.getCreators();
     const alreadyFollowed = creators.some(c => c.channelId === videoData.channelId);
     creatorFollowed = alreadyFollowed;
@@ -1584,15 +1601,16 @@ async function showDownloadFile(id) {
 
 async function ensureContextMenus() {
   await chrome.contextMenus.removeAll();
-  chrome.contextMenus.create({
-    id: QUEUE_CONTEXT_MENU_ID,
-    title: 'Claude: accoda video + segui creator',
-    contexts: ['link', 'image', 'page', 'video'],
-    documentUrlPatterns: ['*://*.youtube.com/*'],
-  });
+  const ctx = ['link', 'image', 'page', 'video'];
+  const patterns = ['*://*.youtube.com/*'];
+  chrome.contextMenus.create({ id: 'tb-parent', title: 'TubeBrain', contexts: ctx, documentUrlPatterns: patterns });
+  chrome.contextMenus.create({ id: CTX_QUEUE, parentId: 'tb-parent', title: 'Accoda video', contexts: ctx, documentUrlPatterns: patterns });
+  chrome.contextMenus.create({ id: CTX_QUEUE_FOLLOW, parentId: 'tb-parent', title: 'Accoda + segui creator', contexts: ctx, documentUrlPatterns: patterns });
+  chrome.contextMenus.create({ id: CTX_GENERATE_NOW, parentId: 'tb-parent', title: 'Genera MDX ora', contexts: ctx, documentUrlPatterns: patterns });
+  chrome.contextMenus.create({ id: CTX_QUEUE_PRIORITY, parentId: 'tb-parent', title: 'Accoda con priorità', contexts: ctx, documentUrlPatterns: patterns });
 }
 
-async function queueVideoFromUrl(targetUrl, sourceTab) {
+async function queueVideoFromUrl(targetUrl, sourceTab, options = {}) {
   if (shouldSkipDuplicateQueue(sourceTab?.id, targetUrl)) {
     return { success: true, skippedDuplicate: true };
   }
@@ -1617,7 +1635,7 @@ async function queueVideoFromUrl(targetUrl, sourceTab) {
     phase: 'queue-enrich',
     icon: '🏷️',
   }, sourceTab?.windowId || null);
-  const result = await addToQueue(pageData);
+  const result = await addToQueue(pageData, options);
   const notifyTabId = sourceTab?.id || null;
   await completeRuntimeStatus({
     title: pageData.title,
