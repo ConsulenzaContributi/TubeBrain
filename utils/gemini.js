@@ -596,6 +596,14 @@ con un blocco \`\`\`text`
       ...optionalSections.map(section => section.match(/^##\s+(.+)$/m)?.[1] || null),
     ].filter(Boolean).join(' → ');
 
+    const groundingRules = `═══════════════════════════════════════
+REGOLE DI GROUNDING (ANCORAGGIO AL VIDEO)
+═══════════════════════════════════════
+• Inizia ogni sezione/capitolo con un riferimento temporale nel formato [mm:ss] preso dalla trascrizione.
+• Per ogni affermazione fattuale chiave, indica il timestamp [mm:ss] del punto in cui viene detta.
+• Se un contenuto è una tua deduzione NON presente esplicitamente nella trascrizione, anteponi il marcatore (inferenza).
+• Non inventare timestamp: usa solo quelli realmente presenti nella trascrizione.`;
+
     return `Sei un learning designer specializzato in tutorial tecnici. ${langInstruction}
 
 Devi produrre SOLO la parte finale di un file MDX. La trascrizione integrale verra aggiunta separatamente dal sistema:
@@ -617,6 +625,8 @@ ${chaptersHint}
 TRASCRIZIONE DI RIFERIMENTO
 ═══════════════════════════════════════
 ${videoData.transcript}
+
+${groundingRules}
 
 ═══════════════════════════════════════
 ISTRUZIONI DI OUTPUT
