@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "TubeBrain",
-  "version": "2.2.0",
-  "version_name": "2.2.0",
+  "version": "2.3.0",
+  "version_name": "2.3.0",
   "description": "Trasforma YouTube in una piattaforma di apprendimento con riassunti AI, note Markdown, screening automatico e workflow per agenti IDE.",
   "permissions": [
     "activeTab",
