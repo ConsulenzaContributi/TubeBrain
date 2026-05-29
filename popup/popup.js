@@ -112,6 +112,7 @@ async function loadPopupPreferences() {
       ? `OpenAI · ${settings.openaiModel || 'gpt-5.4-mini'}`
       : `Gemini · ${settings.model || 'gemini-2.5-flash'}`;
     if ($('footer-model')) $('footer-model').textContent = providerLabel;
+    if (typeof I18n !== 'undefined') I18n.applyI18n(document, settings.uiLanguage || 'it');
   } catch {}
 }
 

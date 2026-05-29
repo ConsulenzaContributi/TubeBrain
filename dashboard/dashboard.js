@@ -82,6 +82,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadFeed();
   loadNewVideosCounts(); // non-blocking — aggiorna badge nuovi video per creator
   updateWorkspaceInsights();
+  // Applica i18n
+  try {
+    const { settings } = await bg('GET_SETTINGS');
+    if (typeof I18n !== 'undefined') I18n.applyI18n(document, settings.uiLanguage || 'it');
+  } catch {}
 });
 
 // ── Navigation ────────────────────────────────────────────────────────────────

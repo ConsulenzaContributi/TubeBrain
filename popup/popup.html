@@ -95,18 +95,18 @@
     <div class="actions">
       <button id="btn-generate" class="btn btn-primary">
         <span class="btn-icon">✨</span>
-        Genera Learning MDX
+        <span data-i18n="popup.generate">Genera Learning MDX</span>
       </button>
       <button id="btn-ocr" class="btn btn-secondary" style="margin-top: 8px; margin-bottom: 8px; width: 100%; display: flex; justify-content: center; align-items: center; gap: 6px; background-color: #f1f3f5; color: #495057; border: 1px solid #dee2e6; border-radius: 8px; padding: 10px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;" title="Scorciatoia: Ctrl+Shift+O (MacOS: Cmd+Shift+O)">
         <span class="btn-icon">📸</span>
-        Cattura Testo a Schermo (OCR)
+        <span data-i18n="popup.ocr">Cattura Testo a Schermo (OCR)</span>
       </button>
       <div class="actions-row">
         <button id="btn-add-queue" class="btn btn-ghost btn-half" title="Aggiungi alla coda senza estrarre (⌘⇧P)">
-          <span class="btn-icon">🕐</span> Coda
+          <span class="btn-icon">🕐</span> <span data-i18n="popup.queue">Coda</span>
         </button>
         <button id="btn-add-creator" class="btn btn-ghost btn-half">
-          <span class="btn-icon">➕</span> Segui Creator
+          <span class="btn-icon">➕</span> <span data-i18n="popup.follow">Segui Creator</span>
         </button>
       </div>
     </div>
@@ -199,6 +199,7 @@
   <script src="../schemas/app-schema.js"></script>
   <script src="../utils/filesystem.js"></script>
   <script src="../utils/cost.js"></script>
+  <script src="../utils/i18n.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
