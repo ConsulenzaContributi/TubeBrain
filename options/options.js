@@ -6,7 +6,10 @@ const bg = (action, data = {}) => chrome.runtime.sendMessage({ action, ...data }
 const GEMINI_FALLBACK_MODELS = [
   'gemini-2.5-flash',
   'gemini-2.5-flash-lite',
+  'gemini-3.0-flash',
   'gemini-2.5-pro',
+  'gemini-3.5-flash',
+  'gemini-3.1-pro'
 ];
 
 const OPENAI_FALLBACK_MODELS = [
@@ -20,6 +23,29 @@ const OPENAI_FALLBACK_MODELS = [
   'gpt-4.1',
   'gpt-4.1-mini',
 ];
+
+const MDX_SECTION_CATALOG = (typeof AppSchema !== 'undefined' && Array.isArray(AppSchema.MDX_SECTION_CATALOG))
+  ? AppSchema.MDX_SECTION_CATALOG
+  : [
+      { key: 'verbatimTranscript', label: '📝 Trascrizione integrale' },
+      { key: 'studyGuide', label: '🎓 Studio guidato' },
+      { key: 'antigravityInstructions', label: '🤖 Istruzioni Google Antigravity' },
+      { key: 'antigravityPrompt', label: '🧩 Prompt Antigravity pronto all’uso' },
+      { key: 'quickSummary', label: '⚡ Sintesi rapida' },
+      { key: 'conceptMap', label: '🗺️ Mappa concettuale' },
+      { key: 'flashcards', label: '🃏 Flashcard' },
+      { key: 'finalQuiz', label: '❓ Quiz finale' },
+      { key: 'interactiveTimeline', label: '⏱️ Timeline interattiva' },
+      { key: 'executionChecklist', label: '✅ Checklist esecuzione' },
+      { key: 'operationalGlossary', label: '📚 Glossario operativo' },
+      { key: 'errorsRecovery', label: '🛠️ Errori frequenti e recovery' },
+      { key: 'tutorialReplication', label: '♻️ Replicazione del tutorial' },
+      { key: 'personalNotes', label: '🗒️ Appunti personali' },
+    ];
+
+const DEFAULT_MDX_SECTIONS = (typeof AppSchema !== 'undefined' && AppSchema.DEFAULT_MDX_SECTIONS)
+  ? { ...AppSchema.DEFAULT_MDX_SECTIONS }
+  : MDX_SECTION_CATALOG.reduce((acc, item) => ({ ...acc, [item.key]: true }), {});
 
 let obsidianDirHandle = null;
 let providerState = {
@@ -40,11 +66,13 @@ let modelCatalogState = {
     key: '',
   },
 };
+let currentMdxSectionSettings = { ...DEFAULT_MDX_SECTIONS };
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
   $('sys-lang').textContent = navigator.language || 'it';
+  renderMdxSectionSettings();
   await loadSettings();
   bindEvents();
   await tryRestoreObsidianHandle();
@@ -77,6 +105,20 @@ async function loadSettings() {
   // Auto-Queue
   const intervalSel = $('auto-queue-interval');
   if (intervalSel) intervalSel.value = settings.autoQueueInterval || '12';
+  
+  if ($('user-topics')) $('user-topics').value = settings.userTopics || '';
+  if ($('auto-extract-high-relevance')) $('auto-extract-high-relevance').checked = settings.autoExtractHighRelevance || false;
+
+  applyMdxSectionSettings(settings.mdxSections || DEFAULT_MDX_SECTIONS);
+
+  // Cloud Sync
+  if ($('cloud-sync-mode')) $('cloud-sync-mode').value = settings.cloudSyncMode || 'none';
+  if ($('notion-token')) $('notion-token').value = settings.notionToken || '';
+  if ($('notion-db-id')) $('notion-db-id').value = settings.notionDbId || '';
+  if ($('github-token')) $('github-token').value = settings.githubToken || '';
+  if ($('github-owner')) $('github-owner').value = settings.githubOwner || '';
+  if ($('github-repo')) $('github-repo').value = settings.githubRepo || '';
+  updateCloudSyncUI();
 
   providerState = {
     initialGeminiKey: settings.geminiApiKey || '',
@@ -138,7 +180,7 @@ async function loadShortcuts() {
         return k;
       });
       shortcutEl.innerHTML = keys.map(k =>
-        `<span class="shortcut-badge">${k}</span>`
+        `<span class="shortcut-badge">${Sanitize.escapeHtml(k)}</span>`
       ).join('<span class="shortcut-sep">+</span>');
       detectedEl.textContent = `✅ Scorciatoia attiva: ${queueCmd.shortcut}`;
       detectedEl.style.color = 'var(--success)';
@@ -193,6 +235,11 @@ function bindEvents() {
   $('btn-open-shortcuts').addEventListener('click', () => {
     chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
   });
+
+  $('btn-enable-all-sections')?.addEventListener('click', () => setAllMdxSections(true));
+  $('btn-disable-all-sections')?.addEventListener('click', () => setAllMdxSections(false));
+
+  $('cloud-sync-mode')?.addEventListener('change', updateCloudSyncUI);
 
   // Salva
   $('btn-save').addEventListener('click', saveSettings);
@@ -428,6 +475,15 @@ async function saveSettings() {
     useFileSystemApi:  $('toggle-obsidian').checked,
     downloadFolder:    $('obsidian-path').value || '',
     autoQueueInterval: autoQueueInterval,
+    userTopics:        $('user-topics') ? $('user-topics').value.trim() : '',
+    autoExtractHighRelevance: $('auto-extract-high-relevance') ? $('auto-extract-high-relevance').checked : false,
+    mdxSections:       collectMdxSectionSettings(),
+    cloudSyncMode:     $('cloud-sync-mode') ? $('cloud-sync-mode').value : 'none',
+    notionToken:       $('notion-token') ? $('notion-token').value.trim() : '',
+    notionDbId:        $('notion-db-id') ? $('notion-db-id').value.trim() : '',
+    githubToken:       $('github-token') ? $('github-token').value.trim() : '',
+    githubOwner:       $('github-owner') ? $('github-owner').value.trim() : '',
+    githubRepo:        $('github-repo') ? $('github-repo').value.trim() : '',
   };
 
   const requiredKey = settings.provider === 'openai' ? settings.openaiApiKey : settings.geminiApiKey;
@@ -453,6 +509,41 @@ async function saveSettings() {
   }
 
   btn.disabled = false;
+}
+
+function renderMdxSectionSettings() {
+  const container = $('mdx-sections-list');
+  if (!container) return;
+  container.innerHTML = MDX_SECTION_CATALOG.map(section => `
+    <label class="check-item">
+      <input type="checkbox" data-mdx-section="${section.key}">
+      <span>${section.label}</span>
+    </label>
+  `).join('');
+}
+
+function applyMdxSectionSettings(mdxSections = {}) {
+  const merged = { ...DEFAULT_MDX_SECTIONS, ...(mdxSections || {}) };
+  currentMdxSectionSettings = merged;
+  document.querySelectorAll('[data-mdx-section]').forEach(input => {
+    const key = input.getAttribute('data-mdx-section');
+    input.checked = Boolean(merged[key]);
+  });
+}
+
+function collectMdxSectionSettings() {
+  const inputs = document.querySelectorAll('[data-mdx-section]');
+  if (!inputs.length) return { ...currentMdxSectionSettings };
+  return MDX_SECTION_CATALOG.reduce((acc, section) => {
+    acc[section.key] = Boolean(document.querySelector(`[data-mdx-section="${section.key}"]`)?.checked);
+    return acc;
+  }, {});
+}
+
+function setAllMdxSections(nextValue) {
+  document.querySelectorAll('[data-mdx-section]').forEach(input => {
+    input.checked = Boolean(nextValue);
+  });
 }
 
 function updateProviderUI() {

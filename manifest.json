@@ -28,7 +28,7 @@
   "content_scripts": [
     {
       "matches": ["*://*.youtube.com/*"],
-      "js": ["content-script.js", "ocr-content.js"],
+      "js": ["utils/sanitize.js", "content-script.js", "ocr-content.js"],
       "css": ["ocr-content.css"],
       "run_at": "document_idle"
     }

@@ -273,7 +273,8 @@
     const icon  = isSuccess ? '🕐' : 'ℹ️';
     const label = isSuccess ? 'Azione completata' : 'Nessuna modifica';
     const color = isSuccess ? '#1a73e8' : '#f59e0b';
-    const titleShort = (title || '').length > 52 ? title.slice(0, 52) + '…' : (title || '');
+    const titleShort = Sanitize.escapeHtml((title || '').length > 52 ? title.slice(0, 52) + '…' : (title || ''));
+    const subtitleSafe = Sanitize.escapeHtml(subtitle || '');
 
     const toast = document.createElement('div');
     toast.id = 'lh-queue-toast';
@@ -305,7 +306,7 @@
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:700;color:${color};letter-spacing:0.3px;margin-bottom:2px">${label}</div>
         <div style="font-size:12px;color:#495057;line-height:1.4;word-break:break-word">${titleShort}</div>
-        ${subtitle ? `<div style="font-size:11px;color:#6b7280;line-height:1.35;margin-top:3px">${subtitle}</div>` : ''}
+        ${subtitleSafe ? `<div style="font-size:11px;color:#6b7280;line-height:1.35;margin-top:3px">${subtitleSafe}</div>` : ''}
       </div>
       <span style="font-size:18px;font-weight:700;color:#868e96;cursor:pointer;flex-shrink:0;pointer-events:all;padding:0 2px"
             onclick="this.closest('#lh-queue-toast').remove()">×</span>

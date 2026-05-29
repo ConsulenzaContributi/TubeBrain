@@ -428,7 +428,7 @@ async function showVideoState(vd, settings) {
   if (badges) {
     badges.innerHTML = '';
     if (vd.captionTracks?.length)
-      badges.innerHTML += `<span class="badge info">CC: ${vd.captionTracks.map(t=>t.languageCode).join(', ')}</span>`;
+      badges.innerHTML += `<span class="badge info">CC: ${Sanitize.escapeHtml(vd.captionTracks.map(t=>t.languageCode).join(', '))}</span>`;
   }
   if (vd.warning === 'no_captions') show('no-captions-warn');
 
@@ -609,7 +609,7 @@ function showDoneState(filename) {
     $('done-filename').textContent = '💾 ' + f.split('/').pop(); // mostra solo il nome file
   }
   const tw = $('tags-wrap');
-  if (tw) tw.innerHTML = currentTags.map(t=>`<span class="tag">#${t}</span>`).join('');
+  if (tw) tw.innerHTML = currentTags.map(t=>`<span class="tag">#${Sanitize.escapeHtml(t)}</span>`).join('');
   const pv = $('preview-content');
   if (pv) pv.innerHTML = markdownToPreview(currentMarkdown);
   showState('done');
@@ -1024,8 +1024,8 @@ function hasProviderKey(settings = {}) {
 }
 function markdownToPreview(md) {
   if (!md) return '';
-  return md.slice(0,1500)
-    .replace(/^---[\s\S]*?---\n/,'')
+  return Sanitize.escapeHtml(md.slice(0,1500)
+    .replace(/^---[\s\S]*?---\n/,''))
     .replace(/^# (.+)$/m,'<h1>$1</h1>')
     .replace(/^## (.+)$/gm,'<h2>$1</h2>')
     .replace(/^### (.+)$/gm,'<h3>$1</h3>')
