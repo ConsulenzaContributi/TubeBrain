@@ -571,6 +571,8 @@ async function doBackgroundExtraction(id) {
   const pending   = summaries.find(s => s.id === id);
   if (!pending) throw new Error('Riepilogo non trovato');
 
+  await Storage.updateSummaryById(id, { status: 'extracting', extractionStartedAt: Date.now() });
+
   await updateRuntimeStatus({
     kind: 'info',
     kicker: 'Estrazione in corso',
@@ -729,6 +731,9 @@ async function doBackgroundExtraction(id) {
       })
       .catch(() => {});
 
+  } catch (extractErr) {
+    await Storage.updateSummaryById(id, { status: 'pending', extractionStartedAt: null }).catch(() => {});
+    throw extractErr;
   } finally {
     // Chiudi tab aperta in background
     chrome.tabs.remove(tab.id).catch(() => {});
