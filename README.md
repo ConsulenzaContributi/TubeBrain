@@ -1,23 +1,23 @@
-# Codex_Chrome-PlugIn_YouTube-Learn
+# Claude_Chrome-PlugIn_YouTube-Learn
 
 Chrome Extension MV3 per trasformare video YouTube in documenti `MDX` orientati all'apprendimento.
 
-Stato attuale: `v2.2.7`
+Stato attuale: `v2.5.0`
 
 Regola di versioning: ogni modifica al plugin, anche minima, richiede sempre un incremento della versione prima di distribuire, testare o comprimere il progetto.
 
 ## Cosa fa
 
-- estrae trascrizione e capitoli da YouTube
-- genera un file `MDX` con 3 livelli:
-  - trascrizione integrale
-  - studio guidato
-  - sintesi rapida
-- aggiunge mappa concettuale, flashcard, quiz ed errori frequenti
-- produce output strutturati per Google Antigravity
-- salva tutto in archivio locale con dashboard di ricerca
-- supporta export `MDX`, `TXT`, `JSON` e `Antigravity JSON`
-- supporta import batch da URL e playlist
+- estrae trascrizione e capitoli da YouTube (con fallback sui sottotitoli auto-generati)
+- genera un file `MDX` navigabile: trascrizione integrale, studio guidato, sintesi rapida, mappa concettuale, flashcard, quiz, glossario, timeline ed errori frequenti
+- viewer MDX con indice + scroll-spy, ricerca interna, sezioni a fisarmonica, timestamp cliccabili e tracciamento del progresso
+- popup semplificato a **5 strumenti** attivabili (Trascrizione, Studio, Memorizzazione, Pratica, Antigravity)
+- ripasso con algoritmo **FSRS** + promemoria, statistiche di studio e **ricerca semantica locale** (TF-IDF)
+- accodamento massivo: selezione miniature, "accoda pagina", import da URL/playlist, menu tasto destro e scorciatoie
+- ingestione **PDF** (pdf.js) e analisi di articoli web come fonti di studio
+- integrazioni: **AnkiConnect**, **Notion**, sync vault **Obsidian**, più export `MDX`/`TXT`/`JSON`/Antigravity/Anki/Mindmap
+- interfaccia **IT/EN** (i18n), archivio locale con dashboard di ricerca
+- sicurezza: segreti solo in `storage.local`, output sanificato, chiamate AI con retry/timeout
 
 ## Requisiti
 
