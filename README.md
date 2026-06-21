@@ -2,7 +2,7 @@
 
 **Estensione Chrome (Manifest V3) che trasforma qualsiasi video YouTube in una piattaforma di apprendimento basata su AI.**
 
-> **Versione attuale: `v1.0.4`** — [scarica l'ultima release](https://github.com/ConsulenzaContributi/TubeBrain/releases/latest)
+> **Versione attuale: `v1.0.5`** — [scarica l'ultima release](https://github.com/ConsulenzaContributi/TubeBrain/releases/latest)
 >
 > Questo branch (`main`) è la **vetrina di distribuzione**: contiene solo questa guida e lo ZIP installabile. Il **codice sorgente** completo è nel branch [`source`](https://github.com/ConsulenzaContributi/TubeBrain/tree/source).
 
@@ -47,7 +47,7 @@ viene salvato anche come file Markdown portabile (Obsidian-friendly).
 ## Installazione
 
 1. Vai alla pagina **[Releases](https://github.com/ConsulenzaContributi/TubeBrain/releases/latest)**
-   e scarica il file **`TubeBrainC-v1.0.4.zip`**.
+   e scarica il file **`TubeBrainC-v1.0.5.zip`**.
 2. **Estrai** lo zip in una cartella a tua scelta (es. `~/TubeBrain`).
 3. Apri Chrome e vai su **`chrome://extensions`**.
 4. Attiva in alto a destra la **Modalità sviluppatore**.
