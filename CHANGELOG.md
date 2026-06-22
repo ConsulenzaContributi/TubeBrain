@@ -5,6 +5,26 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it-IT/1.0.
 
 ---
 
+## [1.8.2] - 2026-06-22
+
+### 🐛 Correzioni
+- Rimosso parametro `temperature` dal body Chat Completions: non supportato da `gpt-5.x` con `max_completion_tokens`, causava un timeout silenzioso che bloccava il job indefinitamente.
+- Temperature rimane attiva solo per modelli `gpt-4.x` quando esplicitamente richiesta.
+- Timeout API portato a **180 secondi** per i modelli più lenti.
+- Aggiunto `console.error` nel service worker per rendere visibili gli errori OpenAI nel DevTools.
+
+## [1.8.1] - 2026-06-22
+
+### 🐛 Correzioni
+- Corretto parametro API `max_tokens` → `max_completion_tokens` in `openai.js` (HTTP 400 su `gpt-5.4-mini` e modelli OpenAI recenti).
+- Aggiunti metodi `generateConceptMap()` e `generateAgentInstructions()` in `ai-provider.js`: mancavano, causando eccezioni silenziose quando il provider era OpenAI.
+- Implementato rilevamento automatico dell'endpoint: modelli `gpt-*` → `/v1/chat/completions`, modelli `o1/o3/o4-*` → `/v1/responses`.
+
+## [1.8.0] - 2026-06-22
+
+### ✨ Novità
+- Aggiunto banner informativo nello stato non-YouTube: segnala che su quella pagina l'estrazione video non è disponibile e che l'unico strumento utilizzabile è l'**OCR**.
+
 ## [1.7.0] - 2026-06-21
 
 ### ✨ Novità
